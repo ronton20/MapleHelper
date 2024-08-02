@@ -1,0 +1,18 @@
+<div
+  *ngIf="!hidden"
+  class="slot-background"
+  [class.locked]="locked"
+  (mouseenter)="onMouseEnter()"
+  (mouseleave)="onMouseLeave()"
+  (click)="onClick()"
+>
+  <p *ngIf="slot?.name" class="slot-label">{{ slot.name }}</p>
+  <img *ngIf="item?.image" [src]="item.image" alt="Equipment" />
+  <div class="tooltip" *ngIf="hover && item">
+    <p>
+      {{ item.stars }}
+      <img [src]="star_filled" alt="Stars" />
+    </p>
+    <p>Name: {{ item.name }}</p>
+  </div>
+</div>
