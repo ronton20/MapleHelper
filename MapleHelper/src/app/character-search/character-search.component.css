@@ -1,0 +1,74 @@
+.search-container,
+.character-list,
+.selected-character {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.search-container p,
+.character-list p,
+.selected-character p {
+  margin: 0;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+}
+
+form label,
+form input,
+form select,
+form button {
+  margin: 10px 0;
+}
+
+.character-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+  border: 1px solid #ccc;
+  cursor: pointer;
+}
+
+.character-item img {
+  width: 100px;
+  margin-right: 10px;
+}
+
+.character-item-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  padding-block: 5px;
+}
+
+.selected-character {
+  width: 100%;
+  border: 2px solid #333;
+  text-align: center;
+  position: relative;
+}
+
+.selected-character img {
+  width: 150px;
+  margin-bottom: 10px;
+}
+
+.back-button {
+  background: none;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+  position: absolute;
+  top: 0px;
+  left: 0px;
+  color: #ccc;
+}

@@ -1,0 +1,58 @@
+<div class="search-container" *ngIf="view === 'search'">
+  <h2>Search for a Character</h2>
+  <form (ngSubmit)="searchCharacter()">
+    <label for="region">Region:</label>
+    <select id="region" [(ngModel)]="region" name="region">
+      <option value="na">NA</option>
+      <option value="eu">EU</option>
+    </select>
+
+    <label for="characterName">Character Name:</label>
+    <input
+      id="characterName"
+      [(ngModel)]="characterName"
+      name="characterName"
+      type="text"
+      placeholder="Enter character name"
+    />
+
+    <button type="submit">Search</button>
+  </form>
+</div>
+
+<div *ngIf="view === 'results'" class="character-list">
+  <h3>Characters Found:</h3>
+  <div
+    *ngFor="let character of characters"
+    (click)="selectCharacter(character)"
+    class="character-item"
+  >
+    <img
+      [src]="character.characterImgURL"
+      alt="{{ character.characterName }}"
+    />
+    <div class="character-item-info">
+      <p>
+        <b>{{ character.characterName }}</b>
+      </p>
+      <p>{{ character.jobName }}</p>
+      <p>Level {{ character.level }}</p>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="view === 'details'" class="selected-character">
+  <button class="back-button" (click)="goBack()">&#x2190;</button>
+  <h3>Selected Character:</h3>
+  <img
+    [src]="selectedCharacter?.characterImgURL"
+    alt="{{ selectedCharacter?.characterName }}"
+  />
+  <div>
+    <p>
+      <b>{{ selectedCharacter?.characterName }}</b>
+    </p>
+    <p>{{ selectedCharacter?.jobName }}</p>
+    <p>Level {{ selectedCharacter?.level }}</p>
+  </div>
+</div>

@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { InventorySlotComponent } from '../inventory-slot/inventory-slot.component';
 import { ItemFormComponent } from '../item-form/item-form.component';
+import { CharacterSearchComponent } from '../character-search/character-search.component';
 
 interface InventorySlot {
   name?: string;
@@ -17,7 +18,12 @@ interface InventorySlot {
   templateUrl: './equipment-inventory.component.html',
   styleUrls: ['./equipment-inventory.component.css'],
   standalone: true,
-  imports: [CommonModule, InventorySlotComponent, ItemFormComponent],
+  imports: [
+    CommonModule,
+    InventorySlotComponent,
+    ItemFormComponent,
+    CharacterSearchComponent,
+  ],
 })
 export class EquipmentInventoryComponent {
   slots: InventorySlot[] = [
