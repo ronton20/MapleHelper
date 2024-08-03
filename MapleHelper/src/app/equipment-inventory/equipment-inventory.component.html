@@ -1,19 +1,24 @@
-<div class="inventory-container">
-  <div class="inventory-grid">
-    <app-inventory-slot
-      *ngFor="let slot of slots"
-      [slot]="slot"
-      [locked]="slot.locked"
-      [hidden]="slot.hidden"
-      [item]="slot.item"
-      (edit)="editSlot(slot)"
-    ></app-inventory-slot>
+<div class="section">
+  <div class="inventory-container">
+    <div class="inventory-grid">
+      <app-inventory-slot
+        *ngFor="let slot of slots"
+        [slot]="slot"
+        [locked]="slot.locked"
+        [hidden]="slot.hidden"
+        [item]="slot.item"
+        [selected]="slot.selected !== undefined ? slot.selected : false"
+        (edit)="editSlot(slot)"
+      ></app-inventory-slot>
+    </div>
+  </div>
+
+  <div class="inventory-container">
+    <app-item-form
+      *ngIf="selectedSlot"
+      [slot]="selectedSlot"
+      (save)="saveSlot($event)"
+      (cancel)="cancelEdit()"
+    ></app-item-form>
   </div>
 </div>
-
-<app-item-form
-  *ngIf="selectedSlot"
-  [slot]="selectedSlot"
-  (save)="saveSlot($event)"
-  (cancel)="cancelEdit()"
-></app-item-form>

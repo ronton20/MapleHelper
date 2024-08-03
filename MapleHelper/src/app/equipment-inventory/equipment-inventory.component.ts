@@ -9,6 +9,7 @@ interface InventorySlot {
   locked: boolean;
   hidden: boolean;
   item?: any;
+  selected?: boolean;
 }
 
 @Component({
@@ -60,17 +61,21 @@ export class EquipmentInventoryComponent {
   selectedSlot: InventorySlot | null = null;
 
   editSlot(slot: InventorySlot) {
+    if (this.selectedSlot) this.selectedSlot.selected = false;
     this.selectedSlot = slot;
+    this.selectedSlot.selected = true;
   }
 
   saveSlot(item: any) {
     if (this.selectedSlot) {
       this.selectedSlot.item = item;
+      this.selectedSlot.selected = false;
     }
     this.selectedSlot = null;
   }
 
   cancelEdit() {
+    if (this.selectedSlot) this.selectedSlot.selected = false;
     this.selectedSlot = null;
   }
 }

@@ -13,6 +13,7 @@ export class InventorySlotComponent {
   @Input() item: any;
   @Input() locked: boolean = false;
   @Input() hidden: boolean = false;
+  @Input() selected: boolean = false;
   @Output() edit = new EventEmitter<void>();
   hover: boolean = false;
   star_filled: string = '../assets/star_filled.png';
@@ -28,7 +29,7 @@ export class InventorySlotComponent {
 
   onClick() {
     if (this.locked) return;
-    console.log('Clicked on', this.slot.name);
+    // console.log('Clicked on', this.slot.name);
     this.edit.emit();
   }
 }

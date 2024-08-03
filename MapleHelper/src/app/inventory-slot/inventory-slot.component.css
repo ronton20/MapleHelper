@@ -12,6 +12,10 @@
   cursor: pointer;
 }
 
+.slot-background.selected {
+  background: linear-gradient(145deg, #ccc, #aaa);
+}
+
 .slot-background.locked {
   background: linear-gradient(145deg, #555, #333);
   cursor: default;
@@ -44,6 +48,10 @@
   font-size: 12px;
   color: darkgray;
   pointer-events: none;
+}
+
+.slot-background.selected .slot-label {
+  color: white;
 }
 
 p img {
