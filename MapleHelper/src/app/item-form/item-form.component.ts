@@ -40,10 +40,46 @@ export class ItemFormComponent {
   setPotentialOptions() {
     // Define potential options based on item type and rarity
     const options = [
-      { rarity: 'rare', options: ['ATT +1%', 'STR +1%'] },
-      { rarity: 'epic', options: ['ATT +2%', 'STR +2%'] },
-      { rarity: 'unique', options: ['ATT +3%', 'STR +3%'] },
-      { rarity: 'legendary', options: ['ATT +4%', 'STR +4%'] },
+      { rarity: 'rare', options: ['STR +3%', 'DEX +3%', 'INT +3%', 'LUK +3%'] },
+      {
+        rarity: 'epic',
+        options: [
+          'STR +6%',
+          'DEX +6%',
+          'INT +6%',
+          'LUK +6%',
+          'STR +3%',
+          'DEX +3%',
+          'INT +3%',
+          'LUK +3%',
+        ],
+      },
+      {
+        rarity: 'unique',
+        options: [
+          'STR +9%',
+          'DEX +9%',
+          'INT +9%',
+          'LUK +9%',
+          'STR +6%',
+          'DEX +6%',
+          'INT +6%',
+          'LUK +6%',
+        ],
+      },
+      {
+        rarity: 'legendary',
+        options: [
+          'STR +12%',
+          'DEX +12%',
+          'INT +12%',
+          'LUK +12%',
+          'STR +9%',
+          'DEX +9%',
+          'INT +9%',
+          'LUK +9%',
+        ],
+      },
     ].find((p) => p.rarity === this.rarity);
 
     this.potentialOptions = options ? options.options : [];
