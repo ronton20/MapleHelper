@@ -1,6 +1,24 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  OnInit,
+  SimpleChanges,
+  OnChanges,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+
+interface FlameOption {
+  key: string;
+  label: string;
+}
+
+interface PotentialOption {
+  rarity: string;
+  options: string[];
+}
 
 @Component({
   selector: 'app-item-form',
@@ -24,16 +42,49 @@ export class ItemFormComponent {
 
   itemRarities = ['rare', 'epic', 'unique', 'legendary'];
 
+  allFlameOptions: FlameOption[] = [
+    { key: 'STR', label: 'STR' },
+    { key: 'DEX', label: 'DEX' },
+    { key: 'INT', label: 'INT' },
+    { key: 'LUK', label: 'LUK' },
+    { key: 'ATT', label: 'ATT' },
+    { key: 'M.ATT', label: 'M.ATT' },
+    { key: 'AllStat', label: 'All Stat' },
+    { key: 'Boss', label: 'Boss Damage' },
+    { key: 'Damage', label: 'Damage' },
+  ];
+  flameOptions: FlameOption[] = [];
+
   constructor() {}
 
   ngOnInit() {
-    if (this.slot.item) {
+    this.updateForm();
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['slot']) {
+      this.updateForm();
+    }
+  }
+
+  updateForm() {
+    if (this.slot) {
       this.item = { ...this.slot.item };
       this.stars = this.item.stars || 0;
       this.maxStars = this.item.maxStars || 25;
       this.rarity = this.item.rarity || 'rare';
-      // Set initial potential options based on item type and rarity
+      this.setFlameOptions();
       this.setPotentialOptions();
+    }
+  }
+
+  setFlameOptions() {
+    if (this.item.type === 'weapon') {
+      this.flameOptions = this.allFlameOptions;
+    } else {
+      this.flameOptions = this.allFlameOptions.filter(
+        (option) => option.key !== 'Boss' && option.key !== 'Damage'
+      );
     }
   }
 

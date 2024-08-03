@@ -1,18 +1,17 @@
 .section {
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  height: min-content;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
 }
 
 .inventory-container {
   width: 280px;
-  height: 100%;
   padding: 10px;
   background-color: #333;
   border: 2px solid #555;
   border-radius: 10px;
+  color: rgb(230, 230, 230);
 }
 
 .inventory-grid {

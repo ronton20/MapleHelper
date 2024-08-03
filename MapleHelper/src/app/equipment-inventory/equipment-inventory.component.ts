@@ -5,7 +5,7 @@ import { ItemFormComponent } from '../item-form/item-form.component';
 
 interface InventorySlot {
   name?: string;
-  stats?: string;
+  type?: string;
   locked: boolean;
   hidden: boolean;
   item?: any;
@@ -21,41 +21,41 @@ interface InventorySlot {
 })
 export class EquipmentInventoryComponent {
   slots: InventorySlot[] = [
-    { name: 'Ring', locked: false, hidden: false }, // Slot for Ring 1
+    { name: 'Ring', locked: false, hidden: false, type: 'ring' }, // Slot for Ring 1
     { locked: true, hidden: true }, // Seperator
-    { name: 'Cap', locked: false, hidden: false }, // Slot for Cap
+    { name: 'Cap', locked: false, hidden: false, type: 'cap' }, // Slot for Cap
     { locked: true, hidden: true }, // Seperator
-    { name: 'Emblem', locked: false, hidden: false }, // Slot for Emblem
+    { name: 'Emblem', locked: false, hidden: false, type: 'emblem' }, // Slot for Emblem
 
-    { name: 'Ring', locked: false, hidden: false }, // Slot for Ring 2
-    { name: 'Pendant', locked: false, hidden: false }, // Slot for Pendant 1
-    { name: 'Face Acc', locked: false, hidden: false }, // Slot for Face Accessory
+    { name: 'Ring', locked: false, hidden: false, type: 'ring' }, // Slot for Ring 2
+    { name: 'Pendant', locked: false, hidden: false, type: 'pendant' }, // Slot for Pendant 1
+    { name: 'Face Acc', locked: false, hidden: false, type: 'faceAcc' }, // Slot for Face Accessory
     { locked: true, hidden: true }, // Seperator
-    { name: 'Badge', locked: false, hidden: false }, // Slot for Badge
+    { name: 'Badge', locked: false, hidden: false, type: 'badge' }, // Slot for Badge
 
-    { name: 'Ring', locked: false, hidden: false }, // Slot for Ring 3
-    { name: 'Pendant', locked: false, hidden: false }, // Slot for Pendant 2
-    { name: 'Eye Acc', locked: false, hidden: false }, // Slot for Eye Accessory
-    { name: 'Ear Acc', locked: false, hidden: false }, // Slot for Ear Accessory
-    { name: 'Medal', locked: false, hidden: false }, // Slot for Medal
+    { name: 'Ring', locked: false, hidden: false, type: 'ring' }, // Slot for Ring 3
+    { name: 'Pendant', locked: false, hidden: false, type: 'pendant' }, // Slot for Pendant 2
+    { name: 'Eye Acc', locked: false, hidden: false, type: 'eyeAcc' }, // Slot for Eye Accessory
+    { name: 'Ear Acc', locked: false, hidden: false, type: 'earAcc' }, // Slot for Ear Accessory
+    { name: 'Medal', locked: false, hidden: false, type: 'medal' }, // Slot for Medal
 
-    { name: 'Ring', locked: false, hidden: false }, // Slot for Ring 4
-    { name: 'Weapon', locked: false, hidden: false }, // Slot for Weapon
-    { name: 'Clothes', locked: false, hidden: false }, // Slot for Clothes
-    { name: 'Shoulder', locked: false, hidden: false }, // Slot for Shoulder
-    { name: 'Sub Weapon', locked: false, hidden: false }, // Slot for Sub Weapon
+    { name: 'Ring', locked: false, hidden: false, type: 'ring' }, // Slot for Ring 4
+    { name: 'Weapon', locked: false, hidden: false, type: 'weapon' }, // Slot for Weapon
+    { name: 'Clothes', locked: false, hidden: false, type: 'clothes' }, // Slot for Clothes
+    { name: 'Shoulder', locked: false, hidden: false, type: 'shoulder' }, // Slot for Shoulder
+    { name: 'Sub Weapon', locked: false, hidden: false, type: 'subWeapon' }, // Slot for Sub Weapon
 
-    { name: 'Pocket', locked: false, hidden: false }, // Slot for Pocket Item
-    { name: 'Belt', locked: false, hidden: false }, // Slot for Belt
-    { name: 'Pants', locked: false, hidden: false }, // Slot for Pants
-    { name: 'Gloves', locked: false, hidden: false }, // Slot for Gloves
-    { name: 'Cape', locked: false, hidden: false }, // Slot for Cape
+    { name: 'Pocket', locked: false, hidden: false, type: 'pocket' }, // Slot for Pocket Item
+    { name: 'Belt', locked: false, hidden: false, type: 'belt' }, // Slot for Belt
+    { name: 'Pants', locked: false, hidden: false, type: 'pants' }, // Slot for Pants
+    { name: 'Gloves', locked: false, hidden: false, type: 'gloves' }, // Slot for Gloves
+    { name: 'Cape', locked: false, hidden: false, type: 'cape' }, // Slot for Cape
 
     { locked: true, hidden: true }, // Seperator
     { locked: true, hidden: true }, // Seperator
-    { name: 'Shoes', locked: false, hidden: false }, // Slot for Shoes
-    { name: 'Android', locked: false, hidden: false }, // Slot for Android
-    { name: 'Heart', locked: false, hidden: false }, // Slot for Heart
+    { name: 'Shoes', locked: false, hidden: false, type: 'shoes' }, // Slot for Shoes
+    { name: 'Android', locked: false, hidden: false, type: 'android' }, // Slot for Android
+    { name: 'Heart', locked: false, hidden: false, type: 'heart' }, // Slot for Heart
   ];
 
   selectedSlot: InventorySlot | null = null;

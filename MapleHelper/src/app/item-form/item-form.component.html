@@ -53,7 +53,12 @@
 
   <label>
     Flames:
-    <input [(ngModel)]="item.flames" placeholder="Flames" />
+    <div class="flame-container">
+      <div *ngFor="let option of flameOptions" class="flame-option">
+        <label>{{ option.label }}: </label>
+        <input [(ngModel)]="item[option.key]" type="number" />
+      </div>
+    </div>
   </label>
 
   <label>
