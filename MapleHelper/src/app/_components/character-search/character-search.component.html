@@ -27,15 +27,12 @@
     (click)="selectCharacter(character)"
     class="character-item"
   >
-    <img
-      [src]="character.characterImgURL"
-      alt="{{ character.characterName }}"
-    />
+    <img [src]="character.imageURL" alt="{{ character.name }}" />
     <div class="character-item-info">
       <p>
-        <b>{{ character.characterName }}</b>
+        <b>{{ character.name }}</b>
       </p>
-      <p>{{ character.jobName }}</p>
+      <p>{{ character.job }}</p>
       <p>Level {{ character.level }}</p>
     </div>
   </div>
@@ -45,14 +42,14 @@
   <button class="back-button" (click)="goBack()">&#x2190;</button>
   <h3>Selected Character:</h3>
   <img
-    [src]="selectedCharacter?.characterImgURL"
-    alt="{{ selectedCharacter?.characterName }}"
+    [src]="selectedCharacter?.imageURL"
+    alt="{{ selectedCharacter?.name }}"
   />
   <div>
     <p>
-      <b>{{ selectedCharacter?.characterName }}</b>
+      <b>{{ selectedCharacter?.name }}</b>
     </p>
-    <p>{{ selectedCharacter?.jobName }}</p>
+    <p>{{ selectedCharacter?.job }}</p>
     <p>Level {{ selectedCharacter?.level }}</p>
   </div>
 </div>

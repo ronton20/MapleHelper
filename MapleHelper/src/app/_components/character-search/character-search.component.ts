@@ -1,14 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, Output, EventEmitter } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-
-interface Character {
-  characterName: string;
-  characterImgURL: string;
-  jobName: string;
-  level: number;
-}
+import { Character } from '../../_interfaces/character';
 
 @Component({
   selector: 'app-character-search',
@@ -18,6 +12,7 @@ interface Character {
   imports: [CommonModule, FormsModule],
 })
 export class CharacterSearchComponent {
+  @Output() select = new EventEmitter<Character>();
   region: string = 'eu';
   characterName: string = '';
   characters: Character[] = [];
@@ -30,9 +25,9 @@ export class CharacterSearchComponent {
     const url = `/api/api/maplestory/no-auth/v1/ranking/${this.region}?type=overall&id=weekly&page_index=1&character_name=${this.characterName}`;
     this.http.get<any>(url).subscribe((response) => {
       this.characters = response.ranks.map((rank: any) => ({
-        characterName: rank.characterName,
-        characterImgURL: rank.characterImgURL,
-        jobName: rank.jobName,
+        name: rank.characterName,
+        imageURL: rank.characterImgURL,
+        job: rank.jobName,
         level: rank.level,
       }));
       this.view = 'results'; // Show results after search
@@ -40,8 +35,10 @@ export class CharacterSearchComponent {
   }
 
   selectCharacter(character: Character) {
+    if (!character) return;
     this.selectedCharacter = character;
     this.view = 'details'; // Show details after selecting a character
+    this.select.emit(this.selectedCharacter);
   }
 
   goBack() {

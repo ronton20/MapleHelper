@@ -1,6 +1,8 @@
 <div class="section">
   <div class="inventory-container">
-    <app-character-search></app-character-search>
+    <app-character-search
+      (select)="selectCharacter($event)"
+    ></app-character-search>
   </div>
   <div class="inventory-container">
     <div class="inventory-grid">
