@@ -7,6 +7,12 @@
 <!-- * * * * * * * to get started with your project! * * * * * * * -->
 <!-- * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * -->
 
+<div
+  [ngStyle]="{ 'background-image': 'url(' + backgroundImage + ')' }"
+  class="background-div"
+>
+  <div class="background-div-overlay"></div>
+</div>
 <main class="main">
   <h1>MapleHelper</h1>
   <app-equipment-inventory></app-equipment-inventory>

@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { EquipmentInventoryComponent } from './equipment-inventory/equipment-inventory.component';
+import { BackgroundService } from './_services/background.service';
+import { EquipmentInventoryComponent } from './_components/equipment-inventory/equipment-inventory.component';
 
 @Component({
   selector: 'app-root',
@@ -12,4 +13,11 @@ import { EquipmentInventoryComponent } from './equipment-inventory/equipment-inv
 })
 export class AppComponent {
   title = 'MapleHelper';
+  backgroundImage: string = '';
+
+  constructor(private backgroundService: BackgroundService) {}
+
+  ngOnInit() {
+    this.backgroundImage = this.backgroundService.getRandomBackground();
+  }
 }
