@@ -1,0 +1,179 @@
+import { useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { Plus, Settings, Swords, Hexagon, Trash2, RefreshCw, Library } from 'lucide-react'
+import { listTemplates, fetchTemplate, type LibraryEntry } from '../api/library'
+import { db, createCharacter, deleteCharacter, updateCharacter, getSettings } from '../db'
+import { useUI } from '../store'
+import { lookupCharacter } from '../api/nexon'
+import { CLASSES, classForJob } from '../data/classes'
+import type { Character } from '../types'
+
+export function Sidebar() {
+  const characters = useLiveQuery(() => db.characters.orderBy('updatedAt').reverse().toArray(), []) ?? []
+  const { selectedCharacterId, setCharacter, view, setView } = useUI()
+  const [adding, setAdding] = useState(false)
+
+  return (
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-panel">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="text-sm font-semibold tracking-wide">Maple Helper</div>
+        <button className="btn btn-ghost btn-sm" title="Settings" onClick={() => setView('settings')}><Settings size={16} /></button>
+      </div>
+
+      <div className="px-3 pb-2">
+        <div className="flex gap-1 rounded-md border border-line bg-panel-2 p-1">
+          <TabBtn active={view === 'equipment'} onClick={() => setView('equipment')} icon={<Swords size={14} />} label="Gear" />
+          <TabBtn active={view === 'hexa'} onClick={() => setView('hexa')} icon={<Hexagon size={14} />} label="HEXA" />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between px-4 pt-2 pb-1">
+        <span className="label">Characters</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)} title="Add character"><Plus size={14} /></button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-2">
+        {characters.length === 0 && (
+          <div className="px-2 py-6 text-center text-xs text-muted">No characters yet.<br />Click + to add one.</div>
+        )}
+        {characters.map(c => (
+          <CharRow key={c.id} c={c} active={c.id === selectedCharacterId} onClick={() => { setCharacter(c.id); if (view === 'settings') setView('equipment') }} />
+        ))}
+      </div>
+
+      {adding && <AddCharacterDialog onClose={() => setAdding(false)} onCreated={(id) => { setCharacter(id); setAdding(false) }} />}
+    </aside>
+  )
+}
+
+function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  return (
+    <button onClick={onClick} className={`flex flex-1 items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs transition-colors ${active ? 'bg-accent/15 text-accent' : 'text-muted hover:text-text'}`}>
+      {icon}{label}
+    </button>
+  )
+}
+
+function CharRow({ c, active, onClick }: { c: Character; active: boolean; onClick: () => void }) {
+  return (
+    <div onClick={onClick} className={`group mb-1 flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors ${active ? 'bg-accent/10 ring-1 ring-accent/40' : 'hover:bg-panel-2'}`}>
+      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-panel-2">
+        {c.imageUrl ? <img src={c.imageUrl} alt="" className="pixel h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center text-xs text-muted">{c.name.slice(0, 2)}</div>}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">{c.name}</div>
+        <div className="truncate text-[11px] text-muted">{c.job || 'Unknown job'}{c.level ? ` · Lv. ${c.level}` : ''}</div>
+      </div>
+      <button className="btn btn-ghost btn-sm opacity-0 group-hover:opacity-100" title="Delete character"
+        onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${c.name} and all its gear/HEXA data?`)) deleteCharacter(c.id) }}>
+        <Trash2 size={13} />
+      </button>
+    </div>
+  )
+}
+
+export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: () => void; onCreated: (id: string) => void; existing?: Character }) {
+  const [name, setName] = useState(existing?.name ?? '')
+  const [job, setJob] = useState(existing?.job ?? '')
+  const [level, setLevel] = useState(existing?.level ?? 0)
+  const [world, setWorld] = useState(existing?.world ?? '')
+  const [imageUrl, setImageUrl] = useState(existing?.imageUrl ?? '')
+  const [classId, setClassId] = useState<string>(existing?.classId ?? '')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const templates = useLiveQuery(() => db.templates.orderBy('name').toArray(), []) ?? []
+  const [lib, setLib] = useState<LibraryEntry[] | null>(null)
+  const [libErr, setLibErr] = useState('')
+  async function browseLibrary() {
+    setLibErr('')
+    try { const s = await getSettings(); setLib(await listTemplates(s.proxyUrl)) } catch (e) { setLibErr((e as Error).message); setLib([]) }
+  }
+  async function importFromLibrary(id: string) {
+    try {
+      const s = await getSettings(); const t = await fetchTemplate(s.proxyUrl, id)
+      await db.templates.put({ ...t, source: t.source?.includes('shared') ? t.source : `${t.source ?? 'chart'} · shared library` })
+      setClassId(`tpl:${t.id}`); setLib(null)
+    } catch (e) { setLibErr((e as Error).message) }
+  }
+
+  async function fetchFromNexon() {
+    setErr(''); setBusy(true)
+    try {
+      const s = await getSettings()
+      const r = await lookupCharacter(name, s.proxyUrl, s.heroic, s.region)
+      setJob(r.job); setLevel(r.level); setWorld(r.world); setImageUrl(r.imageUrl); setName(r.name)
+      const cls = classForJob(r.job); if (cls) setClassId(cls.id)
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  async function save() {
+    if (!name.trim()) return
+    if (existing) {
+      await updateCharacter(existing.id, { name: name.trim(), job, level, world, imageUrl, classId: classId || null })
+      onCreated(existing.id)
+    } else {
+      const c = await createCharacter({ name: name.trim(), job, level, world, imageUrl, classId: classId || null })
+      onCreated(c.id)
+    }
+  }
+
+  return (
+    <Modal title={existing ? 'Edit character' : 'Add character'} onClose={onClose}>
+      <div className="space-y-3">
+        <div>
+          <div className="label mb-1">Character name</div>
+          <div className="flex gap-2">
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="IGN" autoFocus onKeyDown={e => e.key === 'Enter' && fetchFromNexon()} />
+            <button className="btn whitespace-nowrap" onClick={fetchFromNexon} disabled={busy || !name.trim()}><RefreshCw size={14} className={busy ? 'animate-spin' : ''} />Fetch</button>
+          </div>
+          <div className="mt-1 text-[11px] text-muted">Pulls job, level and image from the GMS rankings (region/world type and proxy URL are in Settings). Or fill in manually.</div>
+          {err && <div className="mt-1 text-xs text-red-400">{err}</div>}
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div><div className="label mb-1">Job</div><input value={job} onChange={e => setJob(e.target.value)} /></div>
+          <div><div className="label mb-1">Level</div><input type="number" value={level || ''} onChange={e => setLevel(Number(e.target.value))} /></div>
+          <div><div className="label mb-1">World</div><input value={world} onChange={e => setWorld(e.target.value)} placeholder="Kronos" /></div>
+        </div>
+        <div><div className="label mb-1">Image URL</div><input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://msavatar1.nexon.net/Character/....png" /></div>
+        <div>
+          <div className="label mb-1">HEXA class data</div>
+          <select value={classId} onChange={e => setClassId(e.target.value)}>
+            <option value="">Generic (rename nodes yourself)</option>
+            {CLASSES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {templates.map(t => <option key={t.id} value={`tpl:${t.id}`}>{t.name} (imported chart)</option>)}
+          </select>
+          <div className="mt-1 flex items-center gap-2">
+            <button className="btn btn-sm" onClick={browseLibrary}><Library size={12} />Browse shared library</button>
+            <span className="text-[11px] text-muted">Templates other people imported from charts (via your worker).</span>
+          </div>
+          {libErr && <div className="mt-1 text-xs text-red-400">{libErr}</div>}
+          {lib && lib.length > 0 && (
+            <div className="mt-1 max-h-40 overflow-y-auto rounded-md border border-line">
+              {lib.map(e => (
+                <button key={e.id} onClick={() => importFromLibrary(e.id)} className="flex w-full items-center justify-between border-b border-line px-2 py-1 text-left text-xs last:border-0 hover:bg-panel-2">
+                  <span>{e.name}</span><span className="text-muted">{e.nodes} nodes · {e.steps} steps</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {lib && lib.length === 0 && !libErr && <div className="mt-1 text-xs text-muted">Library is empty so far.</div>}
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={save} disabled={!name.trim()}>{existing ? 'Save' : 'Add'}</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+export function Modal({ title, onClose, children, wide, xwide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean; xwide?: boolean }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onMouseDown={onClose}>
+      <div className={`card w-full ${xwide ? 'max-w-5xl' : wide ? 'max-w-2xl' : 'max-w-md'} p-5 shadow-2xl`} onMouseDown={e => e.stopPropagation()}>
+        <div className="mb-4 text-sm font-semibold">{title}</div>
+        {children}
+      </div>
+    </div>
+  )
+}

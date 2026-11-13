@@ -1,0 +1,184 @@
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, Check, Trash2, Merge, ArrowUp, ArrowDown, Plus, Upload } from 'lucide-react'
+import { nanoid } from 'nanoid'
+import { Modal } from '../Sidebar'
+import { loadImage, analyzeInWorker, cropDataUrl, type ChartResult } from '../../lib/chart/importChart'
+import { GROUPS, GROUP_LABEL, GROUP_TYPES, NODE_TYPE_LABEL, maxLevel, STAT_MAX_LEVEL } from '../../data/hexaCosts'
+import type { HexaNodeDef, HexaNodeType, HexaOrderStep } from '../../types'
+import { db, getSettings } from '../../db'
+import { publishTemplate } from '../../api/library'
+
+export interface ImportOutcome { nodes: HexaNodeDef[]; order: HexaOrderStep[]; imageDataUrl: string; templateId?: string }
+
+interface SkillRow { id: string; name: string; type: HexaNodeType | ''; icon: string; count: number; mergedInto: string | null }
+interface StepRow { index: number; skillId: string; level: number | null; conf: number; icon: string }
+
+export function ChartImportDialog({ file, className, onClose, onApply }: { file: File; className: string; onClose: () => void; onApply: (o: ImportOutcome) => void }) {
+  const [phase, setPhase] = useState<'analyzing' | 'review' | 'error'>('analyzing')
+  const [progress, setProgress] = useState({ msg: 'Loading image…', frac: 0 })
+  const [err, setErr] = useState('')
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null)
+  const [dataUrl, setDataUrl] = useState('')
+  const [warnings, setWarnings] = useState<string[]>([])
+  const [skills, setSkills] = useState<SkillRow[]>([])
+  const [steps, setSteps] = useState<StepRow[]>([])
+  const [onlyFlagged, setOnlyFlagged] = useState(false)
+  const [saveTemplate, setSaveTemplate] = useState(true)
+  const [templateName, setTemplateName] = useState(className)
+  const [publish, setPublish] = useState(false)
+  const [libraryOn, setLibraryOn] = useState(false)
+  useEffect(() => { getSettings().then(s => setLibraryOn(!!s.proxyUrl)) }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { canvas, dataUrl } = await loadImage(file)
+        if (cancelled) return
+        setCanvas(canvas); setDataUrl(dataUrl)
+        const r: ChartResult = await analyzeInWorker(canvas, (msg, frac) => !cancelled && setProgress({ msg, frac }))
+        if (cancelled) return
+        setWarnings(r.warnings)
+        setSkills(r.skills.map(s => ({ id: s.id, name: s.name, type: s.type ?? '', icon: cropDataUrl(canvas, s.iconBox), count: s.count, mergedInto: null })))
+        setSteps(r.steps.map(st => ({ index: st.index, skillId: st.skillId, level: st.level, conf: st.confidence, icon: cropDataUrl(canvas, st.tile, 32) })))
+        setPhase('review')
+      } catch (e) { setErr((e as Error).message); setPhase('error') }
+    })()
+    return () => { cancelled = true }
+  }, [file])
+
+  const liveSkills = skills.filter(s => !s.mergedInto)
+  const resolve = (id: string): string => { const s = skills.find(x => x.id === id); return s?.mergedInto ? resolve(s.mergedInto) : id }
+  const flagged = useMemo(() => steps.filter(s => s.level === null || s.conf < 0.5).length, [steps])
+  const untyped = liveSkills.filter(s => !s.type).length
+  const unnamed = liveSkills.filter(s => !s.name.trim()).length
+
+  function updSkill(id: string, patch: Partial<SkillRow>) { setSkills(ss => ss.map(s => s.id === id ? { ...s, ...patch } : s)) }
+  function removeSkill(id: string) { setSkills(ss => ss.filter(s => s.id !== id)); setSteps(st => st.filter(s => resolve(s.skillId) !== id)) }
+  function updStep(index: number, patch: Partial<StepRow>) { setSteps(ss => ss.map(s => s.index === index ? { ...s, ...patch, conf: 1 } : s)) }
+  function removeStep(index: number) { setSteps(ss => ss.filter(s => s.index !== index)) }
+  function moveStep(index: number, d: -1 | 1) {
+    setSteps(ss => { const i = ss.findIndex(s => s.index === index); const j = i + d; if (i < 0 || j < 0 || j >= ss.length) return ss; const c = [...ss]; [c[i], c[j]] = [c[j], c[i]]; return c })
+  }
+  function addStep(after?: number) {
+    const sk = liveSkills[0]; if (!sk) return
+    const row: StepRow = { index: Date.now() % 1e9 + Math.floor(Math.random() * 1000), skillId: sk.id, level: null, conf: 1, icon: sk.icon }
+    setSteps(ss => { if (after === undefined) return [...ss, row]; const i = ss.findIndex(s => s.index === after); const c = [...ss]; c.splice(i + 1, 0, row); return c })
+  }
+  function removeFlaggedRow() { setSteps(ss => ss.filter(s => !(s.level === null))) }
+
+  async function apply() {
+    // nodes: one per live skill, ids by type counters; order from steps (skipping removed)
+    const counters: Record<string, number> = {}
+    const idOf = new Map<string, string>()
+    const nodes: HexaNodeDef[] = liveSkills.map(s => {
+      const t = (s.type || 'mastery') as HexaNodeType
+      const prefix = ({ origin: 'o', ascent: 'a', skill3: 'k', mastery: 'm', boost: 'b', common: 'c', commonBoost: 'c', stat: 'stat' } as Record<HexaNodeType, string>)[t]
+      counters[prefix] = (counters[prefix] ?? 0) + 1
+      const id = `${prefix}${counters[prefix]}`
+      idOf.set(s.id, id)
+      const def: HexaNodeDef = { id, name: s.name.trim() || `${NODE_TYPE_LABEL[t]} ${counters[prefix]}`, type: t, icon: s.icon }
+      if (t === 'stat') { const n = counters[prefix]; def.unlockFrags = [10, 200, 350][n - 1] ?? 350; def.unlockErda = [5, 10, 15][n - 1] ?? 15 }
+      return def
+    })
+    const order: HexaOrderStep[] = steps.filter(s => s.level !== null).map(s => ({ nodeId: idOf.get(resolve(s.skillId))!, level: Math.max(1, Math.min(maxLevel(nodes.find(n => n.id === idOf.get(resolve(s.skillId)))!.type), s.level!)) }))
+    let templateId: string | undefined
+    if ((saveTemplate || publish) && templateName.trim()) {
+      templateId = nanoid(8)
+      const tpl = { id: templateId, name: templateName.trim(), nodes, order, source: `imported chart (${file.name})`, createdAt: Date.now() }
+      await db.templates.put(tpl)
+      if (publish) { try { const s = await getSettings(); await publishTemplate(s.proxyUrl, tpl, s.publishKey) } catch (e) { alert(`Saved locally, but publishing failed: ${(e as Error).message}`) } }
+    }
+    onApply({ nodes, order, imageDataUrl: dataUrl, templateId })
+  }
+
+  return (
+    <Modal title="Import HEXA chart" onClose={onClose} xwide>
+      {phase === 'analyzing' && (
+        <div className="py-8 text-center">
+          <div className="mb-2 text-sm">{progress.msg}</div>
+          <div className="mx-auto h-2 w-64 overflow-hidden rounded bg-panel-2"><div className="h-full bg-accent transition-all" style={{ width: `${progress.frac * 100}%` }} /></div>
+          <div className="mt-3 text-[11px] text-muted">Finding tiles, matching icons and reading labels — usually 10–40 s.</div>
+        </div>
+      )}
+      {phase === 'error' && <div className="py-6 text-sm text-red-400">{err}</div>}
+      {phase === 'review' && canvas && (
+        <div className="max-h-[78vh] space-y-4 overflow-y-auto pr-1">
+          <div className="rounded-md border border-accent/40 bg-accent/5 p-2 text-xs">
+            <div>⚠ Levels are read by OCR and digits get confused (1↔4, 20↔2, 29↔23) — please skim all levels against the chart, not only the flagged ones.</div>
+            {warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+          </div>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="label">Skills found · {liveSkills.length}{untyped ? ` · ${untyped} without a type` : ''}{unnamed ? ` · ${unnamed} unnamed` : ''}</span>
+            </div>
+            <div className="grid grid-cols-1 gap-1 xl:grid-cols-2">
+              {skills.map(s => s.mergedInto ? null : (
+                <div key={s.id} className="flex items-center gap-2 rounded-md border border-line px-2 py-1">
+                  <img src={s.icon} alt="" className="pixel h-8 w-8 rounded" />
+                  <input value={s.name} placeholder="name…" onChange={e => updSkill(s.id, { name: e.target.value })} className={`w-40 min-w-[8rem] flex-1 py-1 text-xs ${!s.name.trim() ? 'border-accent/60' : ''}`} />
+                  <select value={s.type} onChange={e => updSkill(s.id, { type: e.target.value as HexaNodeType | '' })} className={`w-40 shrink-0 py-1 text-xs ${!s.type ? 'border-accent/60' : ''}`}>
+                    <option value="">type…</option>
+                    {GROUPS.flatMap(g => GROUP_TYPES[g].map(t => <option key={t} value={t}>{GROUP_LABEL[g]} · {NODE_TYPE_LABEL[t]}</option>))}
+                  </select>
+                  <span className="w-8 text-right text-[10px] text-muted">×{s.count}</span>
+                  <select value="" onChange={e => { if (e.target.value) { updSkill(s.id, { mergedInto: e.target.value }); setSkills(ss => ss.map(x => x.id === e.target.value ? { ...x, count: x.count + s.count } : x)) } }} className="w-9 shrink-0 py-1 text-xs" title="Merge into…">
+                    <option value="">⇢</option>
+                    {liveSkills.filter(o => o.id !== s.id).map(o => <option key={o.id} value={o.id}>→ {o.name || o.id}</option>)}
+                  </select>
+                  <button className="btn btn-ghost btn-sm" title="Remove skill and its steps" onClick={() => removeSkill(s.id)}><Trash2 size={12} /></button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-1 text-[11px] text-muted"><Merge size={10} className="inline" /> Use ⇢ to merge an icon variant (e.g. a level-20 Hecate icon) into its skill.</div>
+          </section>
+
+          <section>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="label">Steps · {steps.length}{flagged ? <span className="text-accent"> · {flagged} to check</span> : ''}</span>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1 text-xs text-muted"><input type="checkbox" className="w-auto" checked={onlyFlagged} onChange={e => setOnlyFlagged(e.target.checked)} />only flagged</label>
+                <button className="btn btn-sm" onClick={() => addStep()}><Plus size={12} />Add step</button>
+                {steps.some(s => s.level === null) && <button className="btn btn-sm" title="Remove every step that has no level" onClick={removeFlaggedRow}><Trash2 size={12} />Drop unreadable</button>}
+              </div>
+            </div>
+            <div className="max-h-72 overflow-y-auto rounded-md border border-line">
+              {steps.map((s, pos) => ({ s, pos })).filter(({ s }) => !onlyFlagged || s.level === null || s.conf < 0.5).map(({ s, pos }) => {
+                const bad = s.level === null || s.conf < 0.5
+                const sk = liveSkills.find(x => x.id === resolve(s.skillId))
+                const max = sk?.type === 'stat' ? STAT_MAX_LEVEL : 30
+                return (
+                  <div key={s.index} className={`flex items-center gap-2 border-b border-line px-2 py-0.5 text-xs last:border-0 ${bad ? 'bg-accent/5' : ''}`}>
+                    <span className="w-7 text-right text-muted">{pos + 1}</span>
+                    <img src={s.icon} alt="" className="pixel h-5 w-5 rounded" />
+                    <select value={resolve(s.skillId)} onChange={e => updStep(s.index, { skillId: e.target.value })} className="min-w-0 flex-1 py-0.5 text-xs">
+                      {liveSkills.map(o => <option key={o.id} value={o.id}>{o.name || o.id}</option>)}
+                    </select>
+                    <input type="number" min={1} max={max} value={s.level ?? ''} placeholder="?" onChange={e => updStep(s.index, { level: e.target.value === '' ? null : Math.max(1, Math.min(max, Number(e.target.value))) })} className={`w-14 py-0.5 text-center text-xs ${bad ? 'border-accent' : ''}`} />
+                    {bad ? <AlertTriangle size={12} className="text-accent" /> : <Check size={12} className="text-muted/40" />}
+                    <button className="btn btn-ghost btn-sm" title="Move up" onClick={() => moveStep(s.index, -1)}><ArrowUp size={11} /></button>
+                    <button className="btn btn-ghost btn-sm" title="Move down" onClick={() => moveStep(s.index, 1)}><ArrowDown size={11} /></button>
+                    <button className="btn btn-ghost btn-sm" title="Insert step after" onClick={() => addStep(s.index)}><Plus size={11} /></button>
+                    <button className="btn btn-ghost btn-sm" title="Remove step" onClick={() => removeStep(s.index)}><Trash2 size={11} /></button>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+
+          <section className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
+            <label className="flex items-center gap-2 text-xs"><input type="checkbox" className="w-auto" checked={saveTemplate} onChange={e => setSaveTemplate(e.target.checked)} />Save as class template</label>
+            <input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="Template name (e.g. Hayato)" className="w-56 py-1 text-xs" disabled={!saveTemplate && !publish} />
+            {libraryOn && <label className="flex items-center gap-2 text-xs" title="Upload to the shared library so other people get it as a starting point"><input type="checkbox" className="w-auto" checked={publish} onChange={e => setPublish(e.target.checked)} /><Upload size={12} />Publish to shared library</label>}
+            <div className="ml-auto flex gap-2">
+              <button className="btn" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={apply} disabled={liveSkills.length === 0}>Apply to character</button>
+            </div>
+          </section>
+          <div className="text-[11px] text-muted">Applying replaces this character's node list and leveling order (current levels are kept where names match). Steps without a level are skipped.</div>
+        </div>
+      )}
+    </Modal>
+  )
+}
