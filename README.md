@@ -3,6 +3,9 @@
 Personal MapleStory (GMS Heroic) tracker: gear per character with presets, and HEXA progression with an upgrade path.
 Local-first web app — all data stays in your browser (IndexedDB) with JSON export/import.
 
+> [!CAUTION]
+> MOBILE SUPPORT WILL COME IN THE FUTURE
+
 ## Run it
 
 ```bash
