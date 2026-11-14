@@ -30,7 +30,8 @@ export function SettingsView() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <div className="h-full overflow-y-auto">
+    <div className="mx-auto max-w-2xl space-y-6 p-6" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
       <h1 className="text-lg font-semibold">Settings</h1>
 
       <section className="card space-y-3 p-4">
@@ -69,6 +70,7 @@ export function SettingsView() {
         </div>
         <div className="text-[11px] text-muted">All data lives in this browser (IndexedDB). Export regularly, or to move to another device.</div>
       </section>
+    </div>
     </div>
   )
 }

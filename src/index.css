@@ -18,6 +18,8 @@
 
 @layer base {
 html, body, #root { height: 100%; }
+#root { height: 100dvh; }  /* iOS Safari: track the dynamic toolbar instead of 100vh */
+body { overscroll-behavior: none; }
 body {
   background: var(--color-bg);
   color: var(--color-text);
