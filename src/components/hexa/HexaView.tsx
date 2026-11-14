@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { nanoid } from 'nanoid'
+import { useIsMobile } from '../../store'
 import { Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, X, RotateCcw, ChevronRight, ListOrdered, Wand2, ScanSearch } from 'lucide-react'
 import { db, defaultHexaProfile, migrateHexaProfile, resolveClass, updateCharacter } from '../../db'
 import { ChartImportDialog, type ImportOutcome } from './ChartImportDialog'
@@ -34,6 +35,9 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
   const [showImage, setShowImage] = useState(true)
   const [editingOrder, setEditingOrder] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
+  const mobile = useIsMobile()
+  const [tab, setTab] = useState<'nodes' | 'path' | 'image'>('path')
+  const [zoom, setZoom] = useState(1)
   const importRef = useRef<HTMLInputElement>(null)
 
   const totals = useMemo(() => {
@@ -126,9 +130,9 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
   return (
     <div className="flex h-full min-w-0 flex-col overflow-y-auto">
       {/* header */}
-      <div className="flex flex-wrap items-center gap-6 border-b border-line px-6 py-4">
+      <div className={`flex flex-wrap items-center border-b border-line ${mobile ? 'gap-3 px-3 py-2' : 'gap-6 px-6 py-4'}`}>
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold">HEXA · {character.name}</h1>
+          <h1 className={`font-semibold ${mobile ? 'text-base' : 'text-lg'}`}>HEXA{mobile ? '' : ` · ${character.name}`}</h1>
           <div className="text-xs text-muted">{cls?.name ?? 'Generic template'} · {profile.nodes.length} nodes{profile.autoPath && profile.order.length ? ` · path from ${cls?.orderSource ?? 'custom order'}` : ''}</div>
         </div>
         <Field label="Fragments owned"><input type="number" value={profile.fragmentsOwned || ''} placeholder="0" onChange={e => save({ fragmentsOwned: Number(e.target.value) })} className="w-24 text-center" /></Field>
@@ -158,9 +162,16 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
         </div>
       )}
 
-      <div className="grid flex-1 grid-cols-1 gap-6 p-6 xl:grid-cols-[1fr_1fr]">
+      {mobile && (
+        <div className="flex gap-1 border-b border-line px-3 py-2">
+          {(['nodes', 'path', 'image'] as const).map(t => (
+            <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-2 py-1.5 text-xs capitalize ${tab === t ? 'bg-accent/15 text-accent' : 'bg-panel-2 text-muted'}`}>{t}</button>
+          ))}
+        </div>
+      )}
+      <div className={`grid flex-1 grid-cols-1 ${mobile ? 'gap-3 p-3' : 'gap-6 p-6 xl:grid-cols-[1fr_1fr]'}`}>
         {/* nodes by group */}
-        <div className="card p-4">
+        <div className={`card p-4 ${mobile && tab !== 'nodes' ? 'hidden' : ''}`}>
           <div className="mb-3 flex items-center justify-between">
             <span className="label">Nodes · current levels</span>
             <div className="flex items-center gap-1">
@@ -187,8 +198,8 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
         </div>
 
         {/* path */}
-        <div className="space-y-6">
-          <div className="card p-4">
+        <div className={mobile ? 'space-y-3' : 'space-y-6'}>
+          <div className={`card p-4 ${mobile && tab !== 'path' ? 'hidden' : ''}`}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <span className="label">Upgrade path · {profile.autoPath ? 'auto from leveling order' : 'manual checkpoints'}</span>
               <div className="flex items-center gap-1">
@@ -208,11 +219,11 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
 
             <div className="max-h-[60vh] space-y-1 overflow-y-auto pr-1">
               {steps.map((s, i) => (
-                <div key={s.id} className={`flex items-center gap-2 rounded-md border px-2 py-1 text-sm ${s.done ? 'border-transparent opacity-40' : s.id === nextStep?.id ? 'border-accent/50 bg-accent/5' : 'border-line'}`}>
+                <div key={s.id} style={mobile ? { whiteSpace: 'pre-line' } : undefined} className={`flex items-center gap-2 rounded-md border px-2 py-1 text-sm ${s.done ? 'border-transparent opacity-40' : s.id === nextStep?.id ? 'border-accent/50 bg-accent/5' : 'border-line'}`}>
                   <span className="w-6 text-right text-[11px] text-muted">{i + 1}</span>
                   <NodeIcon node={s.node} size={22} />
                   {profile.autoPath ? (
-                    <span className="min-w-0 flex-1 truncate text-xs">{s.node.name}</span>
+                    <span className={`min-w-0 flex-1 text-xs ${mobile ? 'whitespace-normal leading-tight' : 'truncate'}`}>{s.node.name}</span>
                   ) : (
                     <select value={s.nodeId} onChange={e => updCp(s.id, { nodeId: e.target.value })} className="min-w-0 flex-1 py-1 text-xs">
                       {profile.nodes.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
@@ -222,8 +233,8 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
                   {profile.autoPath
                     ? <span className="w-8 text-center text-xs font-medium">{s.targetLevel}</span>
                     : <input type="number" min={1} max={30} value={s.targetLevel} onChange={e => updCp(s.id, { targetLevel: Math.max(1, Math.min(30, Number(e.target.value))) })} className="w-14 py-1 text-center text-xs" />}
-                  <span className="w-28 text-right text-[11px] text-muted" title={`cumulative ${fmt(s.cumFrags)} frags · ${s.erda} erda`}>
-                    {s.done ? 'done' : `${fmt(s.frags)}f · ${s.erda}e · ${s.cumDays < 0.05 ? 'now' : `${s.cumDays.toFixed(1)}d`}`}
+                  <span className={`${mobile ? 'w-16 text-[10px] leading-tight' : 'w-28 text-[11px]'} text-right text-muted`} title={`cumulative ${fmt(s.cumFrags)} frags · ${s.erda} erda`}>
+                    {s.done ? 'done' : mobile ? `${fmt(s.frags)}f\n${s.cumDays < 0.05 ? 'now' : `${s.cumDays.toFixed(1)}d`}` : `${fmt(s.frags)}f · ${s.erda}e · ${s.cumDays < 0.05 ? 'now' : `${s.cumDays.toFixed(1)}d`}`}
                   </span>
                   {!profile.autoPath && <>
                     <button className="btn btn-ghost btn-sm" onClick={() => move(i, -1)}><ArrowUp size={12} /></button>
@@ -241,10 +252,11 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
             )}
           </div>
 
-          <div className="card p-4">
-            <div className="mb-3 flex items-center justify-between">
+          <div className={`card p-4 ${mobile && tab !== 'image' ? 'hidden' : ''}`}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <span className="label">Leveling-order image</span>
               <div className="flex gap-1">
+                {profile.pathImage && <div className="flex gap-0.5">{[1, 2, 3].map(z => <button key={z} className={`btn btn-sm ${zoom === z ? 'btn-primary' : ''}`} onClick={() => setZoom(z)}>{z}×</button>)}</div>}
                 {profile.pathImage && <button className="btn btn-ghost btn-sm" onClick={() => setShowImage(v => !v)}>{showImage ? 'Hide' : 'Show'}</button>}
                 {profile.pathImage && <button className="btn btn-ghost btn-sm" onClick={() => save({ pathImage: null })}><X size={12} /></button>}
                 <button className="btn btn-sm" onClick={() => fileRef.current?.click()}><ImageIcon size={12} />{profile.pathImage ? 'Replace' : 'Upload'}</button>
@@ -256,7 +268,9 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
             <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) setImportFile(f) }}
               className="flex min-h-[100px] items-center justify-center rounded-md border border-dashed border-line-2 bg-panel-2/40">
               {profile.pathImage && showImage
-                ? <img src={profile.pathImage} alt="HEXA path" className="max-h-[70vh] w-full rounded object-contain" />
+                ? <div className="w-full overflow-auto" style={{ maxHeight: '70vh', touchAction: 'pan-x pan-y' }}>
+                    <img src={profile.pathImage} alt="HEXA path" className="rounded" style={{ width: `${zoom * 100}%`, maxWidth: 'none' }} />
+                  </div>
                 : <span className="px-4 text-center text-xs text-muted">Drop a leveling-order chart here to import its skills, icons and order — any class, any layout (legend + rows, or labelled tiles).</span>}
             </div>
           </div>

@@ -4,13 +4,15 @@
  *   GET  /templates                     list shared HEXA class templates          (needs KV binding "TEMPLATES")
  *   GET  /templates/:id                 one template
  *   POST /templates                     publish a template (JSON body; optional PUBLISH_KEY secret → x-publish-key header)
+ *   GET  /sync/:key                     fetch a user's data snapshot (key = long random string from the app)   (KV "TEMPLATES")
+ *   PUT  /sync/:key                     store a snapshot (≤ 4 MB)
  *
  * Deploy (free):  Workers & Pages → Create Worker → paste this file → Deploy.
  * For the shared library: Workers KV → create a namespace → Worker Settings → Bindings → add KV binding named TEMPLATES.
  * Optional: Settings → Variables → add secret PUBLISH_KEY to restrict who can publish.
  */
 const ALLOWED_HOST = 'www.nexon.com'
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': '*' }
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Allow-Headers': '*' }
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', ...CORS } })
 
 export default {
@@ -41,6 +43,25 @@ export default {
         const meta = { id: tpl.id, name: String(tpl.name).slice(0, 60), nodes: tpl.nodes.length, steps: tpl.order.length, source: String(tpl.source ?? '').slice(0, 120), updatedAt: Date.now() }
         await env.TEMPLATES.put(`tpl:${tpl.id}`, body, { metadata: meta })
         return json({ ok: true, id: tpl.id })
+      }
+      return json({ error: 'method not allowed' }, 405)
+    }
+
+    // ---- cross-device sync (same KV namespace, "sync:" prefix) --------------------------------
+    if (u.pathname.startsWith('/sync/')) {
+      if (!env.TEMPLATES) return json({ error: 'KV namespace TEMPLATES is not bound on this worker' }, 501)
+      const key = u.pathname.slice(6)
+      if (!/^[A-Za-z0-9_-]{16,64}$/.test(key)) return json({ error: 'bad key' }, 400)
+      if (request.method === 'GET') {
+        const v = await env.TEMPLATES.get(`sync:${key}`)
+        return v ? new Response(v, { headers: { 'content-type': 'application/json', ...CORS } }) : json({ error: 'not found' }, 404)
+      }
+      if (request.method === 'PUT') {
+        const body = await request.text()
+        if (body.length > 4_000_000) return json({ error: 'snapshot too large' }, 413)
+        try { JSON.parse(body) } catch { return json({ error: 'bad json' }, 400) }
+        await env.TEMPLATES.put(`sync:${key}`, body)
+        return json({ ok: true, bytes: body.length })
       }
       return json({ error: 'method not allowed' }, 405)
     }

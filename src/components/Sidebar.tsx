@@ -14,7 +14,7 @@ export function Sidebar() {
   const [adding, setAdding] = useState(false)
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-panel">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-panel max-[900px]:w-full">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="text-sm font-semibold tracking-wide">Maple Helper</div>
         <button className="btn btn-ghost btn-sm" title="Settings" onClick={() => setView('settings')}><Settings size={16} /></button>
@@ -188,8 +188,8 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
 
 export function Modal({ title, onClose, children, wide, xwide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean; xwide?: boolean }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onMouseDown={onClose}>
-      <div className={`card w-full ${xwide ? 'max-w-5xl' : wide ? 'max-w-2xl' : 'max-w-md'} p-5 shadow-2xl`} onMouseDown={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 max-[900px]:p-0" onMouseDown={onClose}>
+      <div className={`card w-full ${xwide ? 'max-w-5xl' : wide ? 'max-w-2xl' : 'max-w-md'} max-h-[92vh] overflow-y-auto p-5 shadow-2xl max-[900px]:h-full max-[900px]:max-h-none max-[900px]:max-w-none max-[900px]:rounded-none`} style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))', paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }} onMouseDown={e => e.stopPropagation()}>
         <div className="mb-4 text-sm font-semibold">{title}</div>
         {children}
       </div>

@@ -3,9 +3,6 @@
 Personal MapleStory (GMS Heroic) tracker: gear per character with presets, and HEXA progression with an upgrade path.
 Local-first web app — all data stays in your browser (IndexedDB) with JSON export/import.
 
-> [!CAUTION]
-> MOBILE SUPPORT WILL COME IN THE FUTURE
-
 ## Run it
 
 ```bash
@@ -45,6 +42,16 @@ worker (Cloudflare → Worker → Settings → Variables), never in the app.
   (tesseract.js bundled under `public/tess`), nothing is uploaded anywhere.
 - **Flame score** = main + secondary/12 + 3×ATT + 10×All% (community rule of thumb); goals per item come from the Flame Score Targets table (Early / Mid / Late by item level, flame-advantaged or not) — new items default to the Mid target. Weights per character in Settings.
 - **Backup**: Settings → Export JSON. Import on another device (merge or replace).
+
+## Mobile
+
+The app is a PWA: on iPhone open it in Safari → Share → **Add to Home Screen**. Below ~900 px it switches to a phone layout
+(character drawer, bottom Gear/HEXA tabs, bottom-sheet item editor, stacked HEXA tabs with a zoomable chart image).
+
+**Sync between devices** (Settings → Sync): "Enable sync" creates a random key and shows a QR code / pairing link; scan it
+with the phone camera (or paste the key) and both devices share the same data through the worker (`PUT/GET /sync/:key`,
+stored in the same KV namespace). Newer version of each character wins; deletions don't propagate. Anyone with the key can
+read the data, so don't share it.
 
 ## Shared template library (optional)
 

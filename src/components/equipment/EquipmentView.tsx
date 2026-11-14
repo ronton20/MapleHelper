@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Pencil, RefreshCw, Star } from 'lucide-react'
 import { updateCharacter, getSettings } from '../../db'
-import { useUI } from '../../store'
+import { useUI, useIsMobile } from '../../store'
 import { SLOTS, capOn } from '../../data/slots'
 import type { Character, ItemInstance, Preset, SlotKey } from '../../types'
 import { RANK_COLOR } from '../../lib/flame'
@@ -15,6 +15,7 @@ import { classForJob } from '../../data/classes'
 
 export function EquipmentView({ character }: { character: Character }) {
   const { selectedSlot, setSlot } = useUI()
+  const mobile = useIsMobile()
   const settings = useLiveQuery(() => getSettings(), [])
   const [editing, setEditing] = useState(false)
   const [syncing, setSyncing] = useState(false)
@@ -44,29 +45,31 @@ export function EquipmentView({ character }: { character: Character }) {
     <div className="flex h-full min-w-0">
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         {/* header */}
-        <div className="flex items-center gap-4 border-b border-line px-6 py-4">
-          <div className="h-14 w-14 overflow-hidden rounded-lg bg-panel-2">
+        <div className={`flex items-center gap-4 border-b border-line ${mobile ? 'px-3 py-2' : 'px-6 py-4'}`}>
+          <div className={`${mobile ? 'hidden' : 'h-14 w-14'} overflow-hidden rounded-lg bg-panel-2`}>
             {character.imageUrl && <img src={character.imageUrl} alt="" className="pixel h-full w-full object-contain" />}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h1 className="truncate text-lg font-semibold">{character.name}</h1>
+              <h1 className={`truncate font-semibold ${mobile ? 'text-base' : 'text-lg'}`}>{character.name}</h1>
               <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)} title="Edit"><Pencil size={13} /></button>
               <button className="btn btn-ghost btn-sm" onClick={resync} title="Re-sync from rankings" disabled={syncing}><RefreshCw size={13} className={syncing ? 'animate-spin' : ''} /></button>
             </div>
             <div className="text-xs text-muted">{character.job || '—'}{character.level ? ` · Lv. ${character.level}` : ''}{character.world ? ` · ${character.world}` : ''}</div>
           </div>
-          <Summary preset={preset} />
+          <Summary preset={preset} compact={mobile} />
         </div>
 
         <PresetBar character={character} />
 
-        <div className="flex flex-1 items-start justify-center p-6">
-          <EquipGrid character={character} preset={preset} selected={selectedSlot} onSelect={setSlot} />
+        <div className={`flex flex-1 items-start justify-center ${mobile ? 'p-2' : 'p-6'}`}>
+          <EquipGrid character={character} preset={preset} selected={selectedSlot} onSelect={setSlot} mobile={mobile} />
         </div>
       </div>
 
+      {mobile && selectedSlot && <div className="fixed inset-0 z-30 bg-black/50" onClick={() => setSlot(null)} />}
       <Inspector
+        mobile={mobile}
         key={`${preset.id}:${selectedSlot ?? ''}`}
         slot={selectedSlot}
         item={selectedSlot ? preset.slots[selectedSlot] ?? null : null}
@@ -81,12 +84,13 @@ export function EquipmentView({ character }: { character: Character }) {
   )
 }
 
-function Summary({ preset }: { preset: Preset }) {
+function Summary({ preset, compact }: { preset: Preset; compact?: boolean }) {
   const entries = (Object.entries(preset.slots) as [SlotKey, ItemInstance][]).filter(([k, i]) => capOn(k, 'stars', i.enabled))
   const items = Object.values(preset.slots)
   const stars = entries.reduce((a, [, i]) => a + i.starForce, 0)
   const starGoal = entries.reduce((a, [, i]) => a + Math.max(i.starForce, i.starForceGoal), 0)
   const below = entries.filter(([, i]) => i.starForce < i.starForceGoal).length
+  if (compact) return <div className="text-right text-xs text-muted">{items.length}/{SLOTS.length} items · ★ {stars}/{starGoal}</div>
   return (
     <div className="flex gap-6 text-right">
       <Stat label="Items" value={`${items.length}/${SLOTS.length}`} />
@@ -99,10 +103,12 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
   return <div><div className="label">{label}</div><div className={`text-base font-semibold ${warn ? 'text-accent' : ''}`}>{value}</div></div>
 }
 
-function EquipGrid({ character, preset, selected, onSelect }: { character: Character; preset: Preset; selected: SlotKey | null; onSelect: (s: SlotKey) => void }) {
-  const CELL = 72, GAP = 8
+function EquipGrid({ character, preset, selected, onSelect, mobile }: { character: Character; preset: Preset; selected: SlotKey | null; onSelect: (s: SlotKey) => void; mobile: boolean }) {
+  // desktop: 72px cells; mobile: fit 7 columns in the viewport width (card padding + gaps accounted for)
+  const CELL = mobile ? 'clamp(38px, calc((100vw - 16px - 16px - 6 * 4px) / 7), 72px)' : '72px'
+  const GAP = mobile ? 4 : 8
   return (
-    <div className="card p-4" style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL}px)`, gridTemplateRows: `repeat(6, ${CELL}px)`, gap: GAP }}>
+    <div className={`card ${mobile ? 'p-2' : 'p-4'}`} style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL})`, gridTemplateRows: `repeat(6, ${CELL})`, gap: GAP }}>
       {/* character portrait – center block rows 1-4 */}
       <div style={{ gridColumn: '3 / span 3', gridRow: '1 / span 4' }} className="flex items-center justify-center rounded-lg border border-line bg-panel-2/60">
         {character.imageUrl

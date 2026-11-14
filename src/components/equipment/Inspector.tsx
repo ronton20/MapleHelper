@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, Trash2, Replace, Star } from 'lucide-react'
 import type { Character, ItemInstance, SlotKey, PotentialRank, Flame } from '../../types'
 import { SLOT_BY_KEY, SLOT_CAPS, capOn, type SlotCaps } from '../../data/slots'
@@ -9,15 +9,20 @@ import { newItem } from '../../db'
 import { flameScore, RANK_COLOR, RANK_LABEL } from '../../lib/flame'
 import { ItemSearch } from './ItemSearch'
 
-export function Inspector({ slot, item, character, version, onChange, onClose }: {
+export function Inspector({ slot, item, character, version, onChange, onClose, mobile = false }: {
   slot: SlotKey | null; item: ItemInstance | null; character: Character; version: string
-  onChange: (it: ItemInstance | null) => void; onClose: () => void
+  onChange: (it: ItemInstance | null) => void; onClose: () => void; mobile?: boolean
 }) {
   const [replacing, setReplacing] = useState(false)
+  // desktop: fixed side panel; mobile: bottom sheet
+  const shell = mobile
+    ? 'fixed inset-x-0 bottom-0 z-40 max-h-[88vh] rounded-t-2xl border-t border-line bg-panel shadow-2xl'
+    : 'w-[360px] shrink-0 border-l border-line bg-panel'
 
   if (!slot) {
+    if (mobile) return null
     return (
-      <aside className="flex w-[360px] shrink-0 items-center justify-center border-l border-line bg-panel p-6 text-center text-sm text-muted">
+      <aside className={`${shell} flex items-center justify-center p-6 text-center text-sm text-muted`}>
         Select a slot to view or edit the item.
       </aside>
     )
@@ -26,7 +31,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose }:
 
   if (!item || replacing) {
     return (
-      <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-line bg-panel p-4">
+      <aside className={`${shell} overflow-y-auto p-4`} style={mobile ? { paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' } : undefined}>
         <Header title={`${item ? 'Replace' : 'Add'} · ${def.label}`} onClose={() => { if (replacing) setReplacing(false); else onClose() }} />
         <ItemSearch slot={slot} version={version}
           onPick={(p) => { onChange(newItem({ ...(item ?? {}), ...p, starForceGoal: SLOT_CAPS[slot].stars === true ? defaultStarGoal(maxStarForce(p.reqLevel, p.name)) : 0, ...(SLOT_CAPS[slot].flames === true && hasFlameTarget(slot) && !item ? { flameScoreGoal: flameTarget(p.reqLevel, true).mid } : {}) })); setReplacing(false) }}
@@ -45,7 +50,8 @@ export function Inspector({ slot, item, character, version, onChange, onClose }:
   const maxStars = item.maxStarsOverride ?? autoMax
 
   return (
-    <aside className="w-[360px] shrink-0 overflow-y-auto border-l border-line bg-panel">
+    <aside className={`${shell} overflow-y-auto`} style={mobile ? { paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}>
+      {mobile && <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line-2" />}
       <div className="sticky top-0 z-10 border-b border-line bg-panel p-4">
         <Header title={def.label} onClose={onClose} />
         <div className="flex items-center gap-3">
@@ -74,6 +80,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose }:
         )}
       </div>
 
+      <ClampStars item={item} maxStars={maxStars} enabled={on('stars')} onChange={onChange} />
       <div className="space-y-5 p-4">
         {on('stars') && (
           <Section title="Star Force" right={<Goal value={item.starForce} goal={item.starForceGoal} />}>
@@ -162,6 +169,17 @@ export function Inspector({ slot, item, character, version, onChange, onClose }:
       </div>
     </aside>
   )
+}
+
+/** keeps star force + goal within the item's cap whenever the cap changes (level edit, override, legacy items) */
+function ClampStars({ item, maxStars, enabled, onChange }: { item: ItemInstance; maxStars: number; enabled: boolean; onChange: (it: ItemInstance) => void }) {
+  useEffect(() => {
+    if (!enabled) return
+    const goal = item.starForceGoal > maxStars ? maxStars : item.starForceGoal
+    const sf = item.starForce > maxStars ? maxStars : item.starForce
+    if (goal !== item.starForceGoal || sf !== item.starForce) onChange({ ...item, starForceGoal: goal, starForce: sf })
+  }, [maxStars, enabled, item, onChange])
+  return null
 }
 
 const FLAME_LABEL: Record<keyof Flame, string> = { str: 'STR', dex: 'DEX', int: 'INT', luk: 'LUK', att: 'ATT', matt: 'MATT', allStat: 'All %', bossDmg: 'Boss %', dmg: 'Dmg %', hp: 'HP', mp: 'MP', def: 'DEF', speed: 'Spd', jump: 'Jump', level: '-Lv' }

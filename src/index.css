@@ -56,3 +56,10 @@ input[type="checkbox"] { width: auto; }
 .card { @apply rounded-lg border border-line bg-panel; }
 
 .pixel { image-rendering: pixelated; image-rendering: crisp-edges; }
+
+/* mobile: larger touch targets, no 300ms zoom on inputs (16px font prevents iOS auto-zoom) */
+@media (max-width: 900px) {
+  input, select, textarea { font-size: 16px; }
+  .btn { min-height: 36px; }
+  html { -webkit-text-size-adjust: 100%; }
+}

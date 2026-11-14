@@ -125,6 +125,28 @@ export async function exportAll(): Promise<string> {
   return JSON.stringify(data, null, 2)
 }
 
+/** merge a snapshot from another device: newer `updatedAt` wins per character / HEXA profile; templates union */
+export async function mergeSnapshot(data: { characters?: Character[]; hexa?: HexaProfile[]; templates?: ClassTemplate[] }): Promise<{ changed: number }> {
+  let changed = 0
+  await db.transaction('rw', db.characters, db.hexa, db.templates, async () => {
+    for (const c of data.characters ?? []) {
+      const local = await db.characters.get(c.id)
+      if (!local || (c.updatedAt ?? 0) > (local.updatedAt ?? 0)) { await db.characters.put(c); changed++ }
+    }
+    for (const h of data.hexa ?? []) {
+      const local = await db.hexa.get(h.characterId)
+      if (!local || (h.updatedAt ?? 0) > (local.updatedAt ?? 0)) { await db.hexa.put(h); changed++ }
+    }
+    for (const t of data.templates ?? []) { if (!(await db.templates.get(t.id))) { await db.templates.put(t); changed++ } }
+  })
+  return { changed }
+}
+
+/** everything that should travel between devices (settings stay local) */
+export async function snapshot() {
+  return { app: 'maple-helper', version: 1, exportedAt: new Date().toISOString(), characters: await db.characters.toArray(), hexa: await db.hexa.toArray(), templates: await db.templates.toArray() }
+}
+
 export async function importAll(json: string, mode: 'merge' | 'replace') {
   const data = JSON.parse(json)
   if (data.app !== 'maple-helper') throw new Error('Not a maple-helper export')
