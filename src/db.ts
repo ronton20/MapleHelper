@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { nanoid } from 'nanoid'
-import type { Character, HexaProfile, Settings, Preset, ItemInstance, Flame, FlameWeights, HexaNodeDef, HexaOrderStep, ClassTemplate } from './types'
+import type { Character, HexaProfile, Settings, Preset, ItemInstance, Flame, FlameWeights, HexaNodeDef, HexaOrderStep, ClassTemplate, Region } from './types'
 import { CLASSES, GENERIC_NODES, DEFAULT_WEIGHTS } from './data/classes'
 
 export const db = new Dexie('maple-helper') as Dexie & {
@@ -34,12 +34,12 @@ export async function resolveClass(classId: string | null): Promise<{ id: string
 
 /** build-time default for the worker URL (VITE_PROXY_URL in .env or CI env) – the Settings field overrides it */
 export const BUILD_PROXY_URL: string = (import.meta.env.VITE_PROXY_URL as string | undefined)?.trim() ?? ''
-export const DEFAULT_SETTINGS: Settings = { id: 'settings', msioVersion: '270', proxyUrl: BUILD_PROXY_URL, region: 'eu', heroic: true, publishKey: '' }
+export const DEFAULT_SETTINGS: Settings = { id: 'settings', msioVersion: '270', proxyUrl: BUILD_PROXY_URL, publishKey: '' }
 
 export async function getSettings(): Promise<Settings> {
   const s = { ...DEFAULT_SETTINGS, ...(await db.settings.get('settings')) }
   if (s.msioVersion === '262') s.msioVersion = '270'   // 262 never existed on maplestory.io
-  if (!s.proxyUrl) s.proxyUrl = BUILD_PROXY_URL         // empty override → build default
+  s.proxyUrl = BUILD_PROXY_URL                          // internal: always the build-time worker URL
   return s
 }
 
@@ -52,7 +52,7 @@ export function newItem(partial: Partial<ItemInstance>): ItemInstance {
     itemId: null, name: 'Item', reqLevel: 0, iconUrl: '',
     starForce: 0, starForceGoal: 22,
     potential: { rank: 'none', lines: ['', '', ''] },
-    flame: emptyFlame(), flameScoreGoal: 0,
+    flame: emptyFlame(), flameScoreGoal: 0, flameAdvantaged: true,
     soul: { name: '', option: '' },
     notes: '',
     ...partial,
@@ -63,7 +63,7 @@ export function newPreset(name = 'Main'): Preset {
   return { id: nanoid(8), name, slots: {} }
 }
 
-export async function createCharacter(input: { name: string; world?: string; job?: string; level?: number; imageUrl?: string; classId?: string | null }): Promise<Character> {
+export async function createCharacter(input: { name: string; world?: string; job?: string; level?: number; imageUrl?: string; classId?: string | null; region?: Region; heroic?: boolean }): Promise<Character> {
   const preset = newPreset()
   const cls = await resolveClass(input.classId ?? null)
   const weights: FlameWeights = cls?.flameWeights ?? DEFAULT_WEIGHTS
@@ -71,6 +71,8 @@ export async function createCharacter(input: { name: string; world?: string; job
     id: nanoid(10),
     name: input.name,
     world: input.world ?? '',
+    region: input.region ?? 'eu',
+    heroic: input.heroic ?? true,
     job: input.job ?? '',
     level: input.level ?? 0,
     imageUrl: input.imageUrl ?? '',

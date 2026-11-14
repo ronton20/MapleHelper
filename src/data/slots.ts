@@ -12,6 +12,45 @@ export interface SlotDef {
   simple?: boolean
 }
 
+/** what can be enhanced in a slot: true = always, false = never, 'opt' = depends on the item/class (checkbox on the item) */
+export type Cap = boolean | 'opt'
+export interface SlotCaps { stars: Cap; potential: Cap; flames: Cap }
+export const SLOT_CAPS: Record<SlotKey, SlotCaps> = {
+  ring1: { stars: true, potential: true, flames: false },
+  ring2: { stars: true, potential: true, flames: false },
+  ring3: { stars: true, potential: true, flames: false },
+  ring4: { stars: true, potential: true, flames: false },
+  belt: { stars: true, potential: true, flames: true },
+  pocket: { stars: false, potential: false, flames: true },
+  face: { stars: true, potential: true, flames: true },
+  eye: { stars: true, potential: true, flames: true },
+  earrings: { stars: true, potential: true, flames: true },
+  pendant1: { stars: true, potential: true, flames: true },
+  pendant2: { stars: true, potential: true, flames: true },
+  hat: { stars: true, potential: true, flames: true },
+  top: { stars: true, potential: true, flames: true },
+  bottom: { stars: true, potential: true, flames: true },
+  shoulder: { stars: true, potential: true, flames: false },
+  android: { stars: false, potential: false, flames: false },
+  title: { stars: false, potential: false, flames: false },
+  cape: { stars: true, potential: true, flames: true },
+  gloves: { stars: true, potential: true, flames: true },
+  shoes: { stars: true, potential: true, flames: true },
+  medal: { stars: false, potential: false, flames: false },
+  heart: { stars: true, potential: true, flames: false },
+  badge: { stars: 'opt', potential: 'opt', flames: false },
+  weapon: { stars: true, potential: true, flames: true },
+  secondary: { stars: 'opt', potential: true, flames: 'opt' },
+  emblem: { stars: false, potential: true, flames: false },
+}
+export const CAP_LABEL: Record<keyof SlotCaps, string> = { stars: 'Star Force', potential: 'Potential', flames: 'Flames' }
+
+/** resolve a capability for a concrete item (optional caps default to off) */
+export function capOn(slot: SlotKey, cap: keyof SlotCaps, enabled?: Partial<Record<keyof SlotCaps, boolean>>): boolean {
+  const c = SLOT_CAPS[slot][cap]
+  return c === 'opt' ? !!enabled?.[cap] : c
+}
+
 // Layout mirrors the in-game Equipment window:
 // col1: Ring1-4, Belt, Pocket | col2: Face, Eye, Earrings, Pendant1-2
 // center: character (rows1-4), Weapon / Sub Weapon / Emblem (row5)

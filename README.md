@@ -17,7 +17,7 @@ The worker URL is read at build time from `VITE_PROXY_URL`:
 - locally: copy `.env.example` to `.env` (gitignored) and set it;
 - on GitHub Pages: set it as an Actions **variable** (or secret) named `VITE_PROXY_URL`; `.github/workflows/pages.yml`
   builds and deploys on every push to `main` (enable Pages → Source: GitHub Actions once).
-Users can still override it in Settings. Only the optional library `PUBLISH_KEY` is a real secret, and it lives on the
+It is not shown in the UI. Only the optional library `PUBLISH_KEY` is a real secret, and it lives on the
 worker (Cloudflare → Worker → Settings → Variables), never in the app.
 
 ## One-time setup
@@ -30,7 +30,7 @@ worker (Cloudflare → Worker → Settings → Variables), never in the app.
 
 ## Using it
 
-- **Sidebar**: add characters (+). Click one to open it. Hover → trash to delete.
+- **Sidebar**: add characters (+) — pick region (EU/NA) and world type (Heroic/Regular) in the dialog, then Fetch. Click one to open it. Hover → trash to delete.
 - **Gear**: the grid mirrors the in-game Equipment window. Click a slot → search an item (or add a manual one) → edit stars, potential, flames, soul, notes in the side panel. Borders show potential rank; the star badge turns gold when you hit your goal.
 - **Presets**: tabs above the grid. Double-click or the pencil to rename; duplicate to make a "drop gear" variant of your main set.
 - **HEXA**: set each node's current level; add checkpoints ("node → level") in your intended order. The app computes fragment cost, days at your rate, next step and completion %. Drop your class' leveling-order image on the page to keep it next to the tracker. Nodes are editable (rename/add/remove) and resettable to the class template.
@@ -40,7 +40,7 @@ worker (Cloudflare → Worker → Settings → Variables), never in the app.
   the result as a class template that shows up in the class dropdown for other characters. Works with legend+rows charts
   (Night Walker style), labelled grids (Adele style) and busy-background charts (Hayato style). OCR runs locally
   (tesseract.js bundled under `public/tess`), nothing is uploaded anywhere.
-- **Flame score** = main stat + 3×ATT + 9×All% by default; weights per character in Settings.
+- **Flame score** = main + secondary/12 + 3×ATT + 10×All% (community rule of thumb); goals per item come from the Flame Score Targets table (Early / Mid / Late by item level, flame-advantaged or not) — new items default to the Mid target. Weights per character in Settings.
 - **Backup**: Settings → Export JSON. Import on another device (merge or replace).
 
 ## Shared template library (optional)

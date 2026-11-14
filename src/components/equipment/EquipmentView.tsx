@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Pencil, RefreshCw, Star } from 'lucide-react'
 import { updateCharacter, getSettings } from '../../db'
 import { useUI } from '../../store'
-import { SLOTS } from '../../data/slots'
+import { SLOTS, capOn } from '../../data/slots'
 import type { Character, ItemInstance, Preset, SlotKey } from '../../types'
 import { RANK_COLOR } from '../../lib/flame'
 import { potentialSummary } from '../../data/potentials'
@@ -24,7 +24,7 @@ export function EquipmentView({ character }: { character: Character }) {
     setSyncing(true)
     try {
       const s = await getSettings()
-      const r = await lookupCharacter(character.name, s.proxyUrl, s.heroic, s.region)
+      const r = await lookupCharacter(character.name, s.proxyUrl, character.heroic ?? true, character.region ?? 'eu')
       await updateCharacter(character.id, { job: r.job, level: r.level, world: r.world, imageUrl: r.imageUrl, classId: character.classId ?? classForJob(r.job)?.id ?? null })
     } catch (e) { alert((e as Error).message) } finally { setSyncing(false) }
   }
@@ -82,10 +82,11 @@ export function EquipmentView({ character }: { character: Character }) {
 }
 
 function Summary({ preset }: { preset: Preset }) {
+  const entries = (Object.entries(preset.slots) as [SlotKey, ItemInstance][]).filter(([k, i]) => capOn(k, 'stars', i.enabled))
   const items = Object.values(preset.slots)
-  const stars = items.reduce((a, i) => a + i.starForce, 0)
-  const starGoal = items.reduce((a, i) => a + Math.max(i.starForce, i.starForceGoal), 0)
-  const below = items.filter(i => i.starForce < i.starForceGoal).length
+  const stars = entries.reduce((a, [, i]) => a + i.starForce, 0)
+  const starGoal = entries.reduce((a, [, i]) => a + Math.max(i.starForce, i.starForceGoal), 0)
+  const below = entries.filter(([, i]) => i.starForce < i.starForceGoal).length
   return (
     <div className="flex gap-6 text-right">
       <Stat label="Items" value={`${items.length}/${SLOTS.length}`} />
@@ -109,7 +110,7 @@ function EquipGrid({ character, preset, selected, onSelect }: { character: Chara
           : <div className="text-xs text-muted">no image</div>}
       </div>
       {SLOTS.map(s => (
-        <SlotCell key={s.key} label={s.label} item={preset.slots[s.key] ?? null} summary={preset.slots[s.key] ? potentialSummary(preset.slots[s.key]!.potential.lines, character.flameWeights.mainStat, s.key) : ''} selected={selected === s.key} onClick={() => onSelect(s.key)} style={{ gridColumn: s.col, gridRow: s.row }} />
+        <SlotCell key={s.key} label={s.label} item={preset.slots[s.key] ?? null} summary={preset.slots[s.key] && capOn(s.key, 'potential', preset.slots[s.key]!.enabled) ? potentialSummary(preset.slots[s.key]!.potential.lines, character.flameWeights.mainStat, s.key, character.flameWeights.useMatt || character.flameWeights.mainStat === 'int') : ''} selected={selected === s.key} onClick={() => onSelect(s.key)} style={{ gridColumn: s.col, gridRow: s.row }} />
       ))}
     </div>
   )

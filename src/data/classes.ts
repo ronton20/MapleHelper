@@ -33,8 +33,8 @@ const NW_ORDER: [string, number][] = [
 ]
 
 
-const STR_WARRIOR: FlameWeights = { mainStat: 'str', secondaryStat: 'dex', secondaryWeight: 0.1, attWeight: 3, allStatWeight: 9, useMatt: false }
-const LUK_THIEF: FlameWeights = { mainStat: 'luk', secondaryStat: 'dex', secondaryWeight: 0.1, attWeight: 3, allStatWeight: 9, useMatt: false }
+const STR_WARRIOR: FlameWeights = { mainStat: 'str', secondaryStat: 'dex', secondaryWeight: 1 / 12, attWeight: 3, allStatWeight: 10, useMatt: false }
+const LUK_THIEF: FlameWeights = { mainStat: 'luk', secondaryStat: 'dex', secondaryWeight: 1 / 12, attWeight: 3, allStatWeight: 10, useMatt: false }
 
 const COMMON_NODES = (thirdName: string): HexaNodeDef[] => [
   { id: 'c1', name: 'Sol Janus', type: 'common' },

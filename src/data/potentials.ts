@@ -59,7 +59,7 @@ export function potentialOptions(slot: SlotKey, rank: PotentialRank, reqLevel: n
 }
 
 /** Compact summary of a potential for the grid cell, e.g. "23% STR · 16% CD" */
-export function potentialSummary(lines: string[], mainStat: 'str' | 'dex' | 'int' | 'luk', slot: SlotKey): string {
+export function potentialSummary(lines: string[], mainStat: 'str' | 'dex' | 'int' | 'luk', slot: SlotKey, useMatt = mainStat === 'int'): string {
   const acc = { main: 0, all: 0, att: 0, boss: 0, ied: 0, cd: 0, dmg: 0, meso: 0, drop: 0, cdr: 0, hp: 0 }
   const main = mainStat.toUpperCase()
   const isWeaponish = ['weapon', 'secondary', 'emblem'].includes(slot)
@@ -69,7 +69,8 @@ export function potentialSummary(lines: string[], mainStat: 'str' | 'dex' | 'int
     const u = l.toUpperCase()
     if (/ALL STAT/.test(u)) acc.all += n
     else if (new RegExp(`\\b${main}\\b`).test(u)) acc.main += n
-    else if (/\bM?ATT\b|ATTACK/.test(u)) acc.att += n
+    else if (/\bMATT\b|MAGIC ATT/.test(u)) { if (useMatt) acc.att += n }          // MATT only matters for magic classes
+    else if (/\bATT\b|ATTACK/.test(u)) { if (!useMatt) acc.att += n }           // ATT only for physical classes
     else if (/BOSS/.test(u)) acc.boss += n
     else if (/IGNORE|IED|DEF/.test(u) && !/MAX/.test(u)) acc.ied += n
     else if (/CRIT.*DMG|CRIT.*DAMAGE|\bCD\b/.test(u)) acc.cd += n
@@ -81,7 +82,7 @@ export function potentialSummary(lines: string[], mainStat: 'str' | 'dex' | 'int
   }
   const out: string[] = []
   if (isWeaponish) {
-    if (acc.att) out.push(`${acc.att}% ATT`)
+    if (acc.att) out.push(`${acc.att}% ${useMatt ? 'MATT' : 'ATT'}`)
     if (acc.boss) out.push(`${acc.boss}% Boss`)
     if (acc.ied) out.push(`${acc.ied}% IED`)
   }

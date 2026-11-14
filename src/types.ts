@@ -25,9 +25,13 @@ export interface ItemInstance {
   iconUrl: string            // resolved icon url (or custom)
   starForce: number
   starForceGoal: number
+  maxStarsOverride?: number   // set when the automatic cap (by level/name) is wrong for this item
   potential: { rank: PotentialRank; lines: [string, string, string] }
   flame: Flame
   flameScoreGoal: number
+  flameAdvantaged: boolean   // most boss gear is; e.g. Superior Gollux / Sweetwater / Meister are not
+  /** per-item overrides for slots whose upgrades depend on the item/class (badge, secondary) */
+  enabled?: { stars?: boolean; potential?: boolean; flames?: boolean }
   soul: { name: string; option: string }
   notes: string
 }
@@ -47,10 +51,14 @@ export interface FlameWeights {
   useMatt: boolean
 }
 
+export type Region = 'na' | 'eu'
+
 export interface Character {
   id: string
   name: string
   world: string
+  region: Region                  // rankings region used for fetch / re-sync
+  heroic: boolean                 // Heroic (Reboot) vs regular worlds
   job: string
   level: number
   imageUrl: string
@@ -112,8 +120,6 @@ export interface ClassTemplate {
 export interface Settings {
   id: 'settings'
   msioVersion: string          // maplestory.io GMS version, e.g. "262"
-  proxyUrl: string             // Cloudflare worker base URL for Nexon rankings
-  region: 'na' | 'eu'          // GMS region for rankings lookup
-  heroic: boolean              // Heroic (Reboot) worlds vs regular
+  proxyUrl: string             // worker base URL – internal (build-time VITE_PROXY_URL), not shown in the UI
   publishKey: string           // optional key for publishing to the shared library
 }

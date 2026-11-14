@@ -6,7 +6,7 @@ import { db, createCharacter, deleteCharacter, updateCharacter, getSettings } fr
 import { useUI } from '../store'
 import { lookupCharacter } from '../api/nexon'
 import { CLASSES, classForJob } from '../data/classes'
-import type { Character } from '../types'
+import type { Character, Region } from '../types'
 
 export function Sidebar() {
   const characters = useLiveQuery(() => db.characters.orderBy('updatedAt').reverse().toArray(), []) ?? []
@@ -79,6 +79,8 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   const [world, setWorld] = useState(existing?.world ?? '')
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl ?? '')
   const [classId, setClassId] = useState<string>(existing?.classId ?? '')
+  const [region, setRegion] = useState<Region>(existing?.region ?? (localStorage.getItem('maple-helper.lastRegion') as Region) ?? 'eu')
+  const [heroic, setHeroic] = useState<boolean>(existing?.heroic ?? (localStorage.getItem('maple-helper.lastHeroic') ?? '1') === '1')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const templates = useLiveQuery(() => db.templates.orderBy('name').toArray(), []) ?? []
@@ -100,7 +102,7 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
     setErr(''); setBusy(true)
     try {
       const s = await getSettings()
-      const r = await lookupCharacter(name, s.proxyUrl, s.heroic, s.region)
+      const r = await lookupCharacter(name, s.proxyUrl, heroic, region)
       setJob(r.job); setLevel(r.level); setWorld(r.world); setImageUrl(r.imageUrl); setName(r.name)
       const cls = classForJob(r.job); if (cls) setClassId(cls.id)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
@@ -108,11 +110,12 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
 
   async function save() {
     if (!name.trim()) return
+    localStorage.setItem('maple-helper.lastRegion', region); localStorage.setItem('maple-helper.lastHeroic', heroic ? '1' : '0')
     if (existing) {
-      await updateCharacter(existing.id, { name: name.trim(), job, level, world, imageUrl, classId: classId || null })
+      await updateCharacter(existing.id, { name: name.trim(), job, level, world, imageUrl, classId: classId || null, region, heroic })
       onCreated(existing.id)
     } else {
-      const c = await createCharacter({ name: name.trim(), job, level, world, imageUrl, classId: classId || null })
+      const c = await createCharacter({ name: name.trim(), job, level, world, imageUrl, classId: classId || null, region, heroic })
       onCreated(c.id)
     }
   }
@@ -120,13 +123,29 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   return (
     <Modal title={existing ? 'Edit character' : 'Add character'} onClose={onClose}>
       <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="label mb-1">Region</div>
+            <select value={region} onChange={e => setRegion(e.target.value as Region)}>
+              <option value="eu">Europe</option>
+              <option value="na">North America</option>
+            </select>
+          </div>
+          <div>
+            <div className="label mb-1">World type</div>
+            <select value={heroic ? '1' : '0'} onChange={e => setHeroic(e.target.value === '1')}>
+              <option value="1">Heroic (Reboot)</option>
+              <option value="0">Regular</option>
+            </select>
+          </div>
+        </div>
         <div>
           <div className="label mb-1">Character name</div>
           <div className="flex gap-2">
             <input value={name} onChange={e => setName(e.target.value)} placeholder="IGN" autoFocus onKeyDown={e => e.key === 'Enter' && fetchFromNexon()} />
             <button className="btn whitespace-nowrap" onClick={fetchFromNexon} disabled={busy || !name.trim()}><RefreshCw size={14} className={busy ? 'animate-spin' : ''} />Fetch</button>
           </div>
-          <div className="mt-1 text-[11px] text-muted">Pulls job, level and image from the GMS rankings (region/world type and proxy URL are in Settings). Or fill in manually.</div>
+          <div className="mt-1 text-[11px] text-muted">Pulls job, level, world and image from the GMS rankings for the region / world type above. Or fill in manually.</div>
           {err && <div className="mt-1 text-xs text-red-400">{err}</div>}
         </div>
         <div className="grid grid-cols-3 gap-2">
