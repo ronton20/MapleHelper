@@ -1,18 +1,22 @@
 /**
  * Cloudflare Worker for Maple Helper:
  *   GET  /?url=<nexon rankings url>     CORS proxy for the GMS rankings JSON (only www.nexon.com is allowed)
- *   GET  /templates                     list shared HEXA class templates          (needs KV binding "TEMPLATES")
+ *   GET  /templates[?class=<key>]       list shared HEXA templates, optionally only one class  (needs KV binding "TEMPLATES")
  *   GET  /templates/:id                 one template
- *   POST /templates                     publish a template (JSON body; optional PUBLISH_KEY secret → x-publish-key header)
+ *   POST /templates                     publish a template (JSON body with classKey; optional PUBLISH_KEY secret → x-publish-key header)
+ *   PUT  /templates/:id                 admin: replace a template          (ADMIN_KEY secret → x-admin-key header)
+ *   DELETE /templates/:id               admin: delete a template
+ *   GET  /admin/check                   admin: verify the key
  *   GET  /sync/:key                     fetch a user's data snapshot (key = long random string from the app)   (KV "TEMPLATES")
  *   PUT  /sync/:key                     store a snapshot (≤ 4 MB)
  *
  * Deploy (free):  Workers & Pages → Create Worker → paste this file → Deploy.
  * For the shared library: Workers KV → create a namespace → Worker Settings → Bindings → add KV binding named TEMPLATES.
  * Optional: Settings → Variables → add secret PUBLISH_KEY to restrict who can publish.
+ * Admin panel: add secret ADMIN_KEY (any long random string) and enter it in the app's Admin page.
  */
 const ALLOWED_HOST = 'www.nexon.com'
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS', 'Access-Control-Allow-Headers': '*' }
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': '*' }
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', ...CORS } })
 
 export default {
@@ -20,29 +24,65 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS })
     const u = new URL(request.url)
 
+    // ---- admin key check ----------------------------------------------------------------------
+    const isAdmin = !!env.ADMIN_KEY && request.headers.get('x-admin-key') === env.ADMIN_KEY
+    if (u.pathname === '/admin/check') {
+      if (!env.ADMIN_KEY) return json({ error: 'ADMIN_KEY is not set on this worker' }, 501)
+      return isAdmin ? json({ ok: true }) : json({ error: 'bad admin key' }, 403)
+    }
+
     // ---- shared template library ------------------------------------------------------------
     if (u.pathname.startsWith('/templates')) {
       if (!env.TEMPLATES) return json({ error: 'KV namespace TEMPLATES is not bound on this worker' }, 501)
-      const id = u.pathname.split('/')[2]
+      const id = decodeURIComponent(u.pathname.split('/')[2] ?? '')
+      const meta = (tpl) => ({
+        id: tpl.id, name: String(tpl.name).slice(0, 80), classKey: String(tpl.classKey ?? ''),
+        nodes: tpl.nodes.length, steps: tpl.order.length, source: String(tpl.source ?? '').slice(0, 120), updatedAt: Date.now(),
+      })
+      const valid = (tpl) => tpl?.id && tpl?.name && Array.isArray(tpl.nodes) && Array.isArray(tpl.order)
+
       if (request.method === 'GET' && !id) {
-        const list = await env.TEMPLATES.list({ prefix: 'tpl:' })
-        const templates = list.keys.map(k => k.metadata).filter(Boolean).sort((a, b) => a.name.localeCompare(b.name))
-        return json({ templates })
+        const want = u.searchParams.get('class')
+        const out = []
+        let cursor
+        do {
+          const list = await env.TEMPLATES.list({ prefix: 'tpl:', cursor })
+          for (const k of list.keys) if (k.metadata && (!want || k.metadata.classKey === want)) out.push(k.metadata)
+          cursor = list.list_complete ? undefined : list.cursor
+        } while (cursor)
+        out.sort((a, b) => (a.classKey || '').localeCompare(b.classKey || '') || a.name.localeCompare(b.name))
+        return json({ templates: out })
       }
       if (request.method === 'GET' && id) {
         const t = await env.TEMPLATES.get(`tpl:${id}`)
         return t ? new Response(t, { headers: { 'content-type': 'application/json', ...CORS } }) : json({ error: 'not found' }, 404)
       }
       if (request.method === 'POST') {
-        if (env.PUBLISH_KEY && request.headers.get('x-publish-key') !== env.PUBLISH_KEY) return json({ error: 'bad publish key' }, 403)
+        if (env.PUBLISH_KEY && request.headers.get('x-publish-key') !== env.PUBLISH_KEY && !isAdmin) return json({ error: 'bad publish key' }, 403)
         let tpl
         try { tpl = await request.json() } catch { return json({ error: 'bad json' }, 400) }
-        if (!tpl?.id || !tpl?.name || !Array.isArray(tpl.nodes) || !Array.isArray(tpl.order)) return json({ error: 'missing fields' }, 400)
+        if (!valid(tpl)) return json({ error: 'missing fields' }, 400)
+        if (!tpl.classKey) return json({ error: 'classKey is required' }, 400)
         const body = JSON.stringify(tpl)
         if (body.length > 2_000_000) return json({ error: 'template too large' }, 413)
-        const meta = { id: tpl.id, name: String(tpl.name).slice(0, 60), nodes: tpl.nodes.length, steps: tpl.order.length, source: String(tpl.source ?? '').slice(0, 120), updatedAt: Date.now() }
-        await env.TEMPLATES.put(`tpl:${tpl.id}`, body, { metadata: meta })
+        if (await env.TEMPLATES.get(`tpl:${tpl.id}`) && !isAdmin) return json({ error: 'a template with this id exists' }, 409)
+        await env.TEMPLATES.put(`tpl:${tpl.id}`, body, { metadata: meta(tpl) })
         return json({ ok: true, id: tpl.id })
+      }
+      if (request.method === 'PUT' && id) {
+        if (!isAdmin) return json({ error: 'admin only' }, 403)
+        let tpl
+        try { tpl = await request.json() } catch { return json({ error: 'bad json' }, 400) }
+        if (!valid(tpl) || tpl.id !== id) return json({ error: 'missing fields or id mismatch' }, 400)
+        const body = JSON.stringify(tpl)
+        if (body.length > 2_000_000) return json({ error: 'template too large' }, 413)
+        await env.TEMPLATES.put(`tpl:${id}`, body, { metadata: meta(tpl) })
+        return json({ ok: true, id })
+      }
+      if (request.method === 'DELETE' && id) {
+        if (!isAdmin) return json({ error: 'admin only' }, 403)
+        await env.TEMPLATES.delete(`tpl:${id}`)
+        return json({ ok: true })
       }
       return json({ error: 'method not allowed' }, 405)
     }

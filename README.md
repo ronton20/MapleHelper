@@ -55,10 +55,16 @@ read the data, so don't share it.
 
 ## Shared template library (optional)
 
-The same worker can host a shared library of imported HEXA templates so other people start from an existing node list,
-icons and leveling order instead of re-importing a chart: in Cloudflare, create a **Workers KV** namespace and bind it to
-the worker as `TEMPLATES` (Worker → Settings → Bindings). Then the import popup offers "Publish to shared library" and the
-Add-character dialog has "Browse shared library". Add a `PUBLISH_KEY` secret on the worker if you want to restrict publishing.
+The worker also hosts a shared library of HEXA templates (node list, icons, leveling order), **categorised by class**.
+Setup: in Cloudflare create a **Workers KV** namespace and bind it to the worker as `TEMPLATES`.
+
+- **Sharing:** in the chart-import popup pick the class, give the save a name, tick "Share with other <class> players".
+  Optional `PUBLISH_KEY` secret on the worker restricts who can publish (enter it in Settings).
+- **Using:** in Add/Edit character pick the class; the "HEXA data" list then shows only that class's built-in data,
+  data saved on this device, and shared saves. Shared data is downloaded when you save the character.
+- **Admin panel:** add an `ADMIN_KEY` secret on the worker (any long random string). In the app: Settings → Admin →
+  enter the key → edit save names, reassign classes, rename/retype nodes, edit the leveling order, replace from JSON,
+  download or delete. The key is kept only for the browser session.
 
 ## Structure
 

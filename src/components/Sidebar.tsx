@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Settings, Swords, Hexagon, Trash2, RefreshCw, Library } from 'lucide-react'
+import { Plus, Settings, Swords, Hexagon, Trash2, RefreshCw } from 'lucide-react'
 import { listTemplates, fetchTemplate, type LibraryEntry } from '../api/library'
+import { GMS_CLASSES, CLASS_GROUPS, CLASS_BY_KEY, classKeyForJob, BUILTIN_TO_KEY } from '../data/gmsClasses'
 import { db, createCharacter, deleteCharacter, updateCharacter, getSettings } from '../db'
 import { useUI } from '../store'
 import { lookupCharacter } from '../api/nexon'
@@ -83,20 +84,29 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   const [heroic, setHeroic] = useState<boolean>(existing?.heroic ?? (localStorage.getItem('maple-helper.lastHeroic') ?? '1') === '1')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
-  const templates = useLiveQuery(() => db.templates.orderBy('name').toArray(), []) ?? []
-  const [lib, setLib] = useState<LibraryEntry[] | null>(null)
-  const [libErr, setLibErr] = useState('')
-  async function browseLibrary() {
-    setLibErr('')
-    try { const s = await getSettings(); setLib(await listTemplates(s.proxyUrl)) } catch (e) { setLibErr((e as Error).message); setLib([]) }
-  }
-  async function importFromLibrary(id: string) {
-    try {
-      const s = await getSettings(); const t = await fetchTemplate(s.proxyUrl, id)
-      await db.templates.put({ ...t, source: t.source?.includes('shared') ? t.source : `${t.source ?? 'chart'} · shared library` })
-      setClassId(`tpl:${t.id}`); setLib(null)
-    } catch (e) { setLibErr((e as Error).message) }
-  }
+  const [classKey, setClassKey] = useState<string>(existing?.classKey || classKeyForJob(existing?.job) || '')
+  const allTemplates = useLiveQuery(() => db.templates.orderBy('name').toArray(), []) ?? []
+  // only data for the chosen class: built-in seed, local templates of that class, shared templates of that class
+  const builtins = CLASSES.filter(c => BUILTIN_TO_KEY[c.id] === classKey)
+  const localTemplates = allTemplates.filter(t => t.classKey === classKey)
+  const [lib, setLib] = useState<LibraryEntry[]>([])
+  const [libState, setLibState] = useState<'idle' | 'loading' | 'error'>('idle')
+  useEffect(() => {
+    if (!classKey) { setLib([]); return }
+    let cancelled = false
+    setLibState('loading')
+    listTemplates(classKey).then(l => { if (!cancelled) { setLib(l.filter(e => !allTemplates.some(t => t.id === e.id))); setLibState('idle') } })
+      .catch(() => { if (!cancelled) { setLib([]); setLibState('error') } })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classKey])
+  // when the class changes, drop a data choice that belongs to another class
+  useEffect(() => {
+    if (!classId || classId.startsWith('lib:')) return
+    const ok = builtins.some(b => b.id === classId) || localTemplates.some(t => `tpl:${t.id}` === classId)
+    if (!ok && (existing?.classId !== classId)) setClassId(builtins[0]?.id ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classKey])
 
   async function fetchFromNexon() {
     setErr(''); setBusy(true)
@@ -104,18 +114,27 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
       const s = await getSettings()
       const r = await lookupCharacter(name, s.proxyUrl, heroic, region)
       setJob(r.job); setLevel(r.level); setWorld(r.world); setImageUrl(r.imageUrl); setName(r.name)
+      const key = classKeyForJob(r.job); if (key) setClassKey(key)
       const cls = classForJob(r.job); if (cls) setClassId(cls.id)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
   async function save() {
     if (!name.trim()) return
+    let dataId = classId
+    if (dataId.startsWith('lib:')) {
+      try {
+        const t = await fetchTemplate(dataId.slice(4))
+        await db.templates.put({ ...t, classKey: t.classKey || classKey, source: t.source?.includes('shared') ? t.source : `${t.source ?? 'chart'} · shared library` })
+        dataId = `tpl:${t.id}`
+      } catch (e) { setErr(`Couldn't download the shared data: ${(e as Error).message}`); return }
+    }
     localStorage.setItem('maple-helper.lastRegion', region); localStorage.setItem('maple-helper.lastHeroic', heroic ? '1' : '0')
     if (existing) {
-      await updateCharacter(existing.id, { name: name.trim(), job, level, world, imageUrl, classId: classId || null, region, heroic })
+      await updateCharacter(existing.id, { name: name.trim(), job, level, world, imageUrl, classId: dataId || null, classKey, region, heroic })
       onCreated(existing.id)
     } else {
-      const c = await createCharacter({ name: name.trim(), job, level, world, imageUrl, classId: classId || null, region, heroic })
+      const c = await createCharacter({ name: name.trim(), job, level, world, imageUrl, classId: dataId || null, classKey, region, heroic })
       onCreated(c.id)
     }
   }
@@ -154,28 +173,33 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
           <div><div className="label mb-1">World</div><input value={world} onChange={e => setWorld(e.target.value)} placeholder="Kronos" /></div>
         </div>
         <div><div className="label mb-1">Image URL</div><input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://msavatar1.nexon.net/Character/....png" /></div>
-        <div>
-          <div className="label mb-1">HEXA class data</div>
-          <select value={classId} onChange={e => setClassId(e.target.value)}>
-            <option value="">Generic (rename nodes yourself)</option>
-            {CLASSES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            {templates.map(t => <option key={t.id} value={`tpl:${t.id}`}>{t.name} (imported chart)</option>)}
-          </select>
-          <div className="mt-1 flex items-center gap-2">
-            <button className="btn btn-sm" onClick={browseLibrary}><Library size={12} />Browse shared library</button>
-            <span className="text-[11px] text-muted">Templates other people imported from charts (via your worker).</span>
-          </div>
-          {libErr && <div className="mt-1 text-xs text-red-400">{libErr}</div>}
-          {lib && lib.length > 0 && (
-            <div className="mt-1 max-h-40 overflow-y-auto rounded-md border border-line">
-              {lib.map(e => (
-                <button key={e.id} onClick={() => importFromLibrary(e.id)} className="flex w-full items-center justify-between border-b border-line px-2 py-1 text-left text-xs last:border-0 hover:bg-panel-2">
-                  <span>{e.name}</span><span className="text-muted">{e.nodes} nodes · {e.steps} steps</span>
-                </button>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div>
+            <div className="label mb-1">Class</div>
+            <select value={classKey} onChange={e => setClassKey(e.target.value)}>
+              <option value="">Select a class…</option>
+              {CLASS_GROUPS.map(g => (
+                <optgroup key={g} label={g}>
+                  {GMS_CLASSES.filter(c => c.group === g).map(c => <option key={c.key} value={c.key}>{c.name}</option>)}
+                </optgroup>
               ))}
-            </div>
-          )}
-          {lib && lib.length === 0 && !libErr && <div className="mt-1 text-xs text-muted">Library is empty so far.</div>}
+            </select>
+          </div>
+          <div>
+            <div className="label mb-1">HEXA data</div>
+            <select value={classId} onChange={e => setClassId(e.target.value)} disabled={!classKey}>
+              <option value="">Generic (rename nodes yourself)</option>
+              {builtins.length > 0 && <optgroup label="Built-in">{builtins.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+              {localTemplates.length > 0 && <optgroup label="Saved on this device">{localTemplates.map(t => <option key={t.id} value={`tpl:${t.id}`}>{t.name}</option>)}</optgroup>}
+              {lib.length > 0 && <optgroup label="Shared library">{lib.map(e => <option key={e.id} value={`lib:${e.id}`}>{e.name} · {e.steps} steps</option>)}</optgroup>}
+            </select>
+          </div>
+        </div>
+        <div className="text-[11px] text-muted">
+          {!classKey ? 'Pick the class (Fetch fills it in) to see HEXA data made for it.'
+            : libState === 'loading' ? `Looking for shared ${CLASS_BY_KEY[classKey]?.name ?? ''} data…`
+            : libState === 'error' ? 'Shared library unavailable right now — built-in and saved data still work.'
+            : `${builtins.length + localTemplates.length + lib.length} option(s) for ${CLASS_BY_KEY[classKey]?.name ?? classKey}. Shared data is downloaded when you save.`}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button className="btn" onClick={onClose}>Cancel</button>

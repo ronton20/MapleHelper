@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import type { SlotKey } from './types'
 
-export type View = 'equipment' | 'hexa' | 'settings'
+export type View = 'equipment' | 'hexa' | 'settings' | 'admin'
 
 interface UIState {
   selectedCharacterId: string | null
@@ -19,7 +19,7 @@ const saved = (() => { try { return JSON.parse(localStorage.getItem(LS_KEY) ?? '
 
 export const useUI = create<UIState>((set) => ({
   selectedCharacterId: saved.selectedCharacterId ?? null,
-  view: saved.view ?? 'equipment',
+  view: saved.view === 'admin' ? 'settings' : (saved.view ?? 'equipment'),
   selectedSlot: null,
   drawerOpen: false,
   setDrawer: (drawerOpen) => set({ drawerOpen }),

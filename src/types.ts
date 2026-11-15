@@ -62,7 +62,8 @@ export interface Character {
   job: string
   level: number
   imageUrl: string
-  classId: string | null          // hexa class data key
+  classId: string | null          // hexa class data key ('hero' built-in, 'tpl:<id>' template)
+  classKey?: string               // GMS class (src/data/gmsClasses.ts), used to filter shared templates
   presets: Preset[]
   activePresetId: string
   flameWeights: FlameWeights
@@ -110,11 +111,13 @@ export interface HexaProfile {
 /** A user-made class template (from a chart import), stored alongside the built-in classes */
 export interface ClassTemplate {
   id: string
-  name: string
+  name: string            // the save's name, e.g. "Fragment-limited order (Nov 2026)"
+  classKey?: string       // GMS class key (src/data/gmsClasses.ts); required for shared templates
   nodes: HexaNodeDef[]
   order: HexaOrderStep[]
   source: string
   createdAt: number
+  updatedAt?: number
 }
 
 export interface Settings {

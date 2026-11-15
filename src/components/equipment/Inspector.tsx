@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, Trash2, Replace, Star } from 'lucide-react'
 import type { Character, ItemInstance, SlotKey, PotentialRank, Flame } from '../../types'
 import { SLOT_BY_KEY, SLOT_CAPS, capOn, type SlotCaps } from '../../data/slots'
-import { potentialOptions } from '../../data/potentials'
+import { type PotentialOptionGroup, potentialOptionGroups } from '../../data/potentials'
 import { flameTarget, hasFlameTarget } from '../../data/flameTargets'
 import { maxStarForce, starGoalPresets, defaultStarGoal } from '../../data/starforce'
 import { newItem } from '../../db'
@@ -48,6 +48,22 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
   const nothing = !on('stars') && !on('potential') && !on('flames')
   const autoMax = maxStarForce(item.reqLevel, item.name)
   const maxStars = item.maxStarsOverride ?? autoMax
+  /** level change: keep goals that the user set, but move goals that were still on an automatic value */
+  function onLevel(lv: number) {
+    const oldMax = item!.maxStarsOverride ?? maxStarForce(item!.reqLevel, item!.name)
+    const newMax = item!.maxStarsOverride ?? maxStarForce(lv, item!.name)
+    const autoStar = item!.starForceGoal === 0 || item!.starForceGoal === oldMax || item!.starForceGoal === defaultStarGoal(oldMax)
+    const starGoal = SLOT_CAPS[slot!].stars === true || item!.enabled?.stars ? (autoStar ? defaultStarGoal(newMax) : Math.min(item!.starForceGoal, newMax)) : item!.starForceGoal
+    let flameGoal = item!.flameScoreGoal
+    if (hasFlameTarget(slot!)) {
+      const adv = item!.flameAdvantaged ?? true
+      const o = flameTarget(item!.reqLevel, adv), n = flameTarget(lv, adv)
+      if (flameGoal === o.early) flameGoal = n.early
+      else if (flameGoal === o.mid) flameGoal = n.mid
+      else if (flameGoal === o.late) flameGoal = n.late
+    }
+    upd({ reqLevel: lv, starForce: Math.min(item!.starForce, newMax), starForceGoal: starGoal, flameScoreGoal: flameGoal })
+  }
 
   return (
     <aside className={`${shell} overflow-y-auto`} style={mobile ? { paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}>
@@ -61,7 +77,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
           <div className="min-w-0 flex-1">
             <input value={item.name} onChange={e => upd({ name: e.target.value })} className="mb-1 border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold hover:border-line" />
             <div className="flex items-center gap-2 px-1 text-[11px] text-muted">
-              <span>Lv.</span><input type="number" value={item.reqLevel || ''} onChange={e => { const lv = Number(e.target.value); const mx = item.maxStarsOverride ?? maxStarForce(lv, item.name); upd({ reqLevel: lv, starForce: Math.min(item.starForce, mx), starForceGoal: item.starForceGoal === 0 || item.starForceGoal > mx ? Math.min(item.starForceGoal || defaultStarGoal(mx), mx) : item.starForceGoal }) }} className="w-16 py-0 text-[11px]" />
+              <span>Lv.</span><input type="number" value={item.reqLevel || ''} onChange={e => onLevel(Number(e.target.value))} className="w-16 py-0 text-[11px]" />
               {item.starForce > 0 && <span className="flex items-center gap-0.5 text-accent"><Star size={10} fill="currentColor" />{item.starForce}</span>}
             </div>
           </div>
@@ -116,13 +132,11 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
               ))}
             </div>
             {item.potential.lines.map((l, i) => (
-              <div key={i}>
-                <datalist id={`pot-${slot}-${i}`}>{potentialOptions(slot, item.potential.rank, item.reqLevel, i + 1).map(s => <option key={s} value={s} />)}</datalist>
-                <input list={`pot-${slot}-${i}`} value={l} placeholder={i === 0 ? 'Line 1 (prime)' : `Line ${i + 1}`} className="mb-1.5"
-                  onChange={e => { const lines = [...item.potential.lines] as [string, string, string]; lines[i] = e.target.value; upd({ potential: { ...item.potential, lines } }) }} />
-              </div>
+              <PotentialPicker key={i} index={i} value={l} disabled={item.potential.rank === 'none'}
+                groups={potentialOptionGroups(slot, item.potential.rank, item.reqLevel, i + 1)}
+                onChange={v => { const lines = [...item.potential.lines] as [string, string, string]; lines[i] = v; upd({ potential: { ...item.potential, lines } }) }} />
             ))}
-            <div className="text-[10px] text-muted">Suggestions depend on slot, item level ({item.reqLevel >= 151 ? '151+' : '71–150'} tier) and rank; lines 2–3 also list the rank below. Free text works too.</div>
+            <div className="text-[10px] text-muted">{item.potential.rank === 'none' ? 'Pick a rank first.' : `Options for this slot at item level ${item.reqLevel >= 151 ? '151+' : '71–150'}; line 1 is always the item’s tier; lines 2–3 can be the same tier or one lower (the badge shows which). "Other…" lets you type any line.`}</div>
           </Section>
         )}
 
@@ -180,6 +194,32 @@ function ClampStars({ item, maxStars, enabled, onChange }: { item: ItemInstance;
     if (goal !== item.starForceGoal || sf !== item.starForce) onChange({ ...item, starForceGoal: goal, starForce: sf })
   }, [maxStars, enabled, item, onChange])
   return null
+}
+
+/** native dropdown (wheel picker on iPhone) with an "Other…" escape hatch for free text */
+function PotentialPicker({ index, value, groups, disabled, onChange }: { index: number; value: string; groups: PotentialOptionGroup[]; disabled: boolean; onChange: (v: string) => void }) {
+  const known = groups.some(g => g.options.includes(value))
+  const [custom, setCustom] = useState(!!value && !known)
+  const selectValue = custom ? '__other__' : known ? value : ''
+  const lineRank = groups.find(g => g.options.includes(value))?.rank
+  return (
+    <div className="mb-1.5 space-y-1">
+      <div className="flex items-center gap-1.5">
+        <span title={lineRank ? RANK_LABEL[lineRank] : 'No line chosen'}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border text-[11px] font-bold"
+          style={lineRank ? { borderColor: RANK_COLOR[lineRank], color: RANK_COLOR[lineRank] } : { borderColor: 'var(--color-line)', color: 'var(--color-muted)' }}>
+          {lineRank ? RANK_LABEL[lineRank][0] : index + 1}
+        </span>
+        <select value={selectValue} disabled={disabled} className={`min-w-0 flex-1 ${value ? '' : 'text-muted'}`}
+          onChange={e => { const v = e.target.value; if (v === '__other__') { setCustom(true) } else { setCustom(false); onChange(v) } }}>
+          <option value="">{`Line ${index + 1}…`}</option>
+          {groups.map(g => <optgroup key={g.label} label={g.label}>{g.options.map(o => <option key={o} value={o}>{o}</option>)}</optgroup>)}
+          <option value="__other__">Other (type it)…</option>
+        </select>
+      </div>
+      {custom && <input value={value} autoFocus placeholder="e.g. Boss Damage +35%" className="ml-[34px] w-[calc(100%-34px)]" onChange={e => onChange(e.target.value)} />}
+    </div>
+  )
 }
 
 const FLAME_LABEL: Record<keyof Flame, string> = { str: 'STR', dex: 'DEX', int: 'INT', luk: 'LUK', att: 'ATT', matt: 'MATT', allStat: 'All %', bossDmg: 'Boss %', dmg: 'Dmg %', hp: 'HP', mp: 'MP', def: 'DEF', speed: 'Spd', jump: 'Jump', level: '-Lv' }

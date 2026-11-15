@@ -1,29 +1,54 @@
 /**
  * Shared template library – lives in the same Cloudflare Worker as the rankings proxy (worker/proxy.js),
- * backed by a KV namespace. Anyone with the app can list/download templates; publishing is open too
- * (optionally gated by a PUBLISH_KEY secret on the worker).
+ * backed by a KV namespace. Templates are categorised by GMS class (classKey).
+ * Anyone can list/download; publishing is open (optionally gated by PUBLISH_KEY);
+ * editing/deleting needs the ADMIN_KEY secret (Admin page).
  */
 import type { ClassTemplate } from '../types'
+import { BUILD_PROXY_URL } from '../db'
 
-export interface LibraryEntry { id: string; name: string; nodes: number; steps: number; source: string; updatedAt: number }
+export interface LibraryEntry { id: string; name: string; classKey: string; nodes: number; steps: number; source: string; updatedAt: number }
 
-const base = (proxyUrl: string) => proxyUrl.replace(/\/$/, '')
+const base = () => {
+  if (!BUILD_PROXY_URL) throw new Error('The shared library is not configured in this build.')
+  return BUILD_PROXY_URL.replace(/\/$/, '')
+}
 
-export async function listTemplates(proxyUrl: string): Promise<LibraryEntry[]> {
-  if (!proxyUrl) throw new Error('No worker URL configured (Settings).')
-  const res = await fetch(`${base(proxyUrl)}/templates`)
-  if (!res.ok) throw new Error(`Library unavailable (${res.status}) – is the KV namespace bound?`)
+export async function listTemplates(classKey?: string): Promise<LibraryEntry[]> {
+  const res = await fetch(`${base()}/templates${classKey ? `?class=${encodeURIComponent(classKey)}` : ''}`, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`Library unavailable (${res.status})`)
   return (await res.json()).templates ?? []
 }
 
-export async function fetchTemplate(proxyUrl: string, id: string): Promise<ClassTemplate> {
-  const res = await fetch(`${base(proxyUrl)}/templates/${encodeURIComponent(id)}`)
+export async function fetchTemplate(id: string): Promise<ClassTemplate> {
+  const res = await fetch(`${base()}/templates/${encodeURIComponent(id)}`, { cache: 'no-store' })
   if (!res.ok) throw new Error(`Template not found (${res.status})`)
   return await res.json()
 }
 
-export async function publishTemplate(proxyUrl: string, tpl: ClassTemplate, key = ''): Promise<void> {
-  if (!proxyUrl) throw new Error('No worker URL configured (Settings).')
-  const res = await fetch(`${base(proxyUrl)}/templates`, { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { 'x-publish-key': key } : {}) }, body: JSON.stringify(tpl) })
+export async function publishTemplate(tpl: ClassTemplate, key = ''): Promise<void> {
+  const res = await fetch(`${base()}/templates`, { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { 'x-publish-key': key } : {}) }, body: JSON.stringify(tpl) })
   if (!res.ok) throw new Error(`Publish failed (${res.status}): ${await res.text()}`)
+}
+
+// ---- admin ----------------------------------------------------------------------------------
+const ADMIN_SS = 'maple-helper.adminKey'
+export const getAdminKey = () => sessionStorage.getItem(ADMIN_SS) ?? ''
+export const clearAdminKey = () => sessionStorage.removeItem(ADMIN_SS)
+
+export async function adminUnlock(key: string): Promise<void> {
+  const res = await fetch(`${base()}/admin/check`, { headers: { 'x-admin-key': key }, cache: 'no-store' })
+  if (res.status === 501) throw new Error('ADMIN_KEY is not set on the worker yet.')
+  if (!res.ok) throw new Error('Wrong admin key.')
+  sessionStorage.setItem(ADMIN_SS, key)
+}
+
+export async function adminSave(tpl: ClassTemplate): Promise<void> {
+  const res = await fetch(`${base()}/templates/${encodeURIComponent(tpl.id)}`, { method: 'PUT', headers: { 'content-type': 'application/json', 'x-admin-key': getAdminKey() }, body: JSON.stringify({ ...tpl, updatedAt: Date.now() }) })
+  if (!res.ok) throw new Error(`Save failed (${res.status}): ${await res.text()}`)
+}
+
+export async function adminDelete(id: string): Promise<void> {
+  const res = await fetch(`${base()}/templates/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'x-admin-key': getAdminKey() } })
+  if (!res.ok) throw new Error(`Delete failed (${res.status}): ${await res.text()}`)
 }

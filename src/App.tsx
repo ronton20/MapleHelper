@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar'
 import { EquipmentView } from './components/equipment/EquipmentView'
 import { HexaView } from './components/hexa/HexaView'
 import { SettingsView } from './components/SettingsView'
+import { AdminView } from './components/AdminView'
 import { consumePairingHash, pull, schedulePush, getSyncKey } from './api/sync'
 
 export default function App() {
@@ -15,7 +16,7 @@ export default function App() {
   const character = useLiveQuery(() => selectedCharacterId ? db.characters.get(selectedCharacterId) : undefined, [selectedCharacterId])
   useSync()
 
-  const main = view === 'settings' ? <SettingsView /> : !character ? <Empty /> : view === 'hexa' ? <HexaView character={character} /> : <EquipmentView character={character} />
+  const main = view === 'admin' ? <AdminView /> : view === 'settings' ? <SettingsView /> : !character ? <Empty /> : view === 'hexa' ? <HexaView character={character} /> : <EquipmentView character={character} />
 
   if (!mobile) {
     return (

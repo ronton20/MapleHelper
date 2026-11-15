@@ -63,7 +63,7 @@ export function newPreset(name = 'Main'): Preset {
   return { id: nanoid(8), name, slots: {} }
 }
 
-export async function createCharacter(input: { name: string; world?: string; job?: string; level?: number; imageUrl?: string; classId?: string | null; region?: Region; heroic?: boolean }): Promise<Character> {
+export async function createCharacter(input: { name: string; world?: string; job?: string; level?: number; imageUrl?: string; classId?: string | null; classKey?: string; region?: Region; heroic?: boolean }): Promise<Character> {
   const preset = newPreset()
   const cls = await resolveClass(input.classId ?? null)
   const weights: FlameWeights = cls?.flameWeights ?? DEFAULT_WEIGHTS
@@ -77,6 +77,7 @@ export async function createCharacter(input: { name: string; world?: string; job
     level: input.level ?? 0,
     imageUrl: input.imageUrl ?? '',
     classId: input.classId ?? null,
+    classKey: input.classKey ?? '',
     presets: [preset],
     activePresetId: preset.id,
     flameWeights: weights,

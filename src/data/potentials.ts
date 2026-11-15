@@ -58,6 +58,22 @@ export function potentialOptions(slot: SlotKey, rank: PotentialRank, reqLevel: n
   return [...prime, ...lower.filter(l => !prime.includes(l))]
 }
 
+/** same options, grouped by rank for a picker: line 1 = item's rank only; lines 2–3 = item's rank + one below */
+export type PotentialOptionGroup = { label: string; rank: PotentialRank; options: string[] }
+/** Line 1 is always the item's own tier (prime). Lines 2-3 can be the same tier or one tier lower. */
+export function potentialOptionGroups(slot: SlotKey, rank: PotentialRank, reqLevel: number, line: number): PotentialOptionGroup[] {
+  if (rank === 'none') return []
+  const g = groupOf(slot), high = reqLevel >= 151, ri = RANKS.indexOf(rank)
+  const cap = (r: PotentialRank) => r[0].toUpperCase() + r.slice(1)
+  const prime = linesFor(g, rank, high)
+  const groups: PotentialOptionGroup[] = [{ label: cap(rank), rank, options: prime }]
+  if (line > 1 && ri > 0) {
+    const lower = linesFor(g, RANKS[ri - 1], high).filter(l => !prime.includes(l))
+    if (lower.length) groups.push({ label: cap(RANKS[ri - 1]), rank: RANKS[ri - 1], options: lower })
+  }
+  return groups
+}
+
 /** Compact summary of a potential for the grid cell, e.g. "23% STR · 16% CD" */
 export function potentialSummary(lines: string[], mainStat: 'str' | 'dex' | 'int' | 'luk', slot: SlotKey, useMatt = mainStat === 'int'): string {
   const acc = { main: 0, all: 0, att: 0, boss: 0, ied: 0, cd: 0, dmg: 0, meso: 0, drop: 0, cdr: 0, hp: 0 }

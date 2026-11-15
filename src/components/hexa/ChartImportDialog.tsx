@@ -7,13 +7,14 @@ import { GROUPS, GROUP_LABEL, GROUP_TYPES, NODE_TYPE_LABEL, maxLevel, STAT_MAX_L
 import type { HexaNodeDef, HexaNodeType, HexaOrderStep } from '../../types'
 import { db, getSettings } from '../../db'
 import { publishTemplate } from '../../api/library'
+import { GMS_CLASSES, CLASS_GROUPS, CLASS_BY_KEY } from '../../data/gmsClasses'
 
-export interface ImportOutcome { nodes: HexaNodeDef[]; order: HexaOrderStep[]; imageDataUrl: string; templateId?: string }
+export interface ImportOutcome { nodes: HexaNodeDef[]; order: HexaOrderStep[]; imageDataUrl: string; templateId?: string; classKey?: string }
 
 interface SkillRow { id: string; name: string; type: HexaNodeType | ''; icon: string; count: number; mergedInto: string | null }
 interface StepRow { index: number; skillId: string; level: number | null; conf: number; icon: string }
 
-export function ChartImportDialog({ file, className, onClose, onApply }: { file: File; className: string; onClose: () => void; onApply: (o: ImportOutcome) => void }) {
+export function ChartImportDialog({ file, className, classKey: initialClassKey = '', onClose, onApply }: { file: File; className: string; classKey?: string; onClose: () => void; onApply: (o: ImportOutcome) => void }) {
   const [phase, setPhase] = useState<'analyzing' | 'review' | 'error'>('analyzing')
   const [progress, setProgress] = useState({ msg: 'Loading image…', frac: 0 })
   const [err, setErr] = useState('')
@@ -24,7 +25,8 @@ export function ChartImportDialog({ file, className, onClose, onApply }: { file:
   const [steps, setSteps] = useState<StepRow[]>([])
   const [onlyFlagged, setOnlyFlagged] = useState(false)
   const [saveTemplate, setSaveTemplate] = useState(true)
-  const [templateName, setTemplateName] = useState(className)
+  const [classKey, setClassKey] = useState(initialClassKey)
+  const [templateName, setTemplateName] = useState(() => `${CLASS_BY_KEY[initialClassKey]?.name ?? className} – ${new Date().toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}`)
   const [publish, setPublish] = useState(false)
   const [libraryOn, setLibraryOn] = useState(false)
   useEffect(() => { getSettings().then(s => setLibraryOn(!!s.proxyUrl)) }, [])
@@ -85,11 +87,11 @@ export function ChartImportDialog({ file, className, onClose, onApply }: { file:
     let templateId: string | undefined
     if ((saveTemplate || publish) && templateName.trim()) {
       templateId = nanoid(8)
-      const tpl = { id: templateId, name: templateName.trim(), nodes, order, source: `imported chart (${file.name})`, createdAt: Date.now() }
+      const tpl = { id: templateId, name: templateName.trim(), classKey, nodes, order, source: `imported chart (${file.name})`, createdAt: Date.now() }
       await db.templates.put(tpl)
-      if (publish) { try { const s = await getSettings(); await publishTemplate(s.proxyUrl, tpl, s.publishKey) } catch (e) { alert(`Saved locally, but publishing failed: ${(e as Error).message}`) } }
+      if (publish) { try { const s = await getSettings(); await publishTemplate(tpl, s.publishKey) } catch (e) { alert(`Saved locally, but publishing failed: ${(e as Error).message}`) } }
     }
-    onApply({ nodes, order, imageDataUrl: dataUrl, templateId })
+    onApply({ nodes, order, imageDataUrl: dataUrl, templateId, classKey })
   }
 
   return (
@@ -167,14 +169,27 @@ export function ChartImportDialog({ file, className, onClose, onApply }: { file:
             </div>
           </section>
 
-          <section className="flex flex-wrap items-center gap-3 border-t border-line pt-3">
-            <label className="flex items-center gap-2 text-xs"><input type="checkbox" className="w-auto" checked={saveTemplate} onChange={e => setSaveTemplate(e.target.checked)} />Save as class template</label>
-            <input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="Template name (e.g. Hayato)" className="w-56 py-1 text-xs" disabled={!saveTemplate && !publish} />
-            {libraryOn && <label className="flex items-center gap-2 text-xs" title="Upload to the shared library so other people get it as a starting point"><input type="checkbox" className="w-auto" checked={publish} onChange={e => setPublish(e.target.checked)} /><Upload size={12} />Publish to shared library</label>}
-            <div className="ml-auto flex gap-2">
-              <button className="btn" onClick={onClose}>Cancel</button>
-              <button className="btn btn-primary" onClick={apply} disabled={liveSkills.length === 0}>Apply to character</button>
+          <section className="space-y-2 border-t border-line pt-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1.4fr]">
+              <label className="text-xs"><span className="label mb-1 block">Class</span>
+                <select value={classKey} onChange={e => setClassKey(e.target.value)} className="text-xs">
+                  <option value="">Select a class…</option>
+                  {CLASS_GROUPS.map(g => <optgroup key={g} label={g}>{GMS_CLASSES.filter(c => c.group === g).map(c => <option key={c.key} value={c.key}>{c.name}</option>)}</optgroup>)}
+                </select>
+              </label>
+              <label className="text-xs"><span className="label mb-1 block">Save name</span>
+                <input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="e.g. Fragment-limited order (Nov 2026)" className="text-xs" />
+              </label>
             </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <label className="flex items-center gap-2 text-xs"><input type="checkbox" className="w-auto" checked={saveTemplate} onChange={e => setSaveTemplate(e.target.checked)} />Save on this device</label>
+              {libraryOn && <label className="flex items-center gap-2 text-xs" title="Upload to the shared library so other players of this class can start from it"><input type="checkbox" className="w-auto" checked={publish} onChange={e => setPublish(e.target.checked)} /><Upload size={12} />Share with other {CLASS_BY_KEY[classKey]?.name ?? ''} players</label>}
+              <div className="ml-auto flex gap-2">
+                <button className="btn" onClick={onClose}>Cancel</button>
+                <button className="btn btn-primary" onClick={apply} disabled={liveSkills.length === 0 || ((saveTemplate || publish) && (!templateName.trim() || !classKey))}>Apply to character</button>
+              </div>
+            </div>
+            {(saveTemplate || publish) && (!templateName.trim() || !classKey) && <div className="text-[11px] text-accent">Pick a class and a save name to save or share this data.</div>}
           </section>
           <div className="text-[11px] text-muted">Applying replaces this character's node list and leveling order (current levels are kept where names match). Steps without a level are skipped.</div>
         </div>

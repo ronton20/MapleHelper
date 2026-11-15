@@ -3,6 +3,8 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { Download, Upload, RefreshCw, Link2, Copy, Unlink } from 'lucide-react'
 import QRCode from 'qrcode'
 import { syncAvailable, getSyncKey, setSyncKey, newSyncKey, pairingUrl, pull, push, lastSync } from '../api/sync'
+import { adminUnlock, getAdminKey } from '../api/library'
+import { ShieldCheck } from 'lucide-react'
 import { db, getSettings, DEFAULT_SETTINGS, BUILD_PROXY_URL, exportAll, importAll, updateCharacter } from '../db'
 import { useUI } from '../store'
 import { CLASSES, DEFAULT_WEIGHTS } from '../data/classes'
@@ -70,8 +72,38 @@ export function SettingsView() {
         </div>
         <div className="text-[11px] text-muted">All data lives in this browser (IndexedDB). Export regularly, or to move to another device.</div>
       </section>
+
+      {BUILD_PROXY_URL && <AdminSection />}
     </div>
     </div>
+  )
+}
+
+function AdminSection() {
+  const { setView } = useUI()
+  const [key, setKey] = useState('')
+  const [err, setErr] = useState('')
+  const [busy, setBusy] = useState(false)
+  if (getAdminKey()) return (
+    <section className="card flex items-center justify-between gap-2 p-4">
+      <div className="label">Admin</div>
+      <button className="btn btn-sm" onClick={() => setView('admin')}><ShieldCheck size={12} />Open admin panel</button>
+    </section>
+  )
+  async function unlock() {
+    setBusy(true); setErr('')
+    try { await adminUnlock(key.trim()); setKey(''); setView('admin') } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <section className="card space-y-2 p-4">
+      <div className="label">Admin</div>
+      <div className="text-xs text-muted">Edit or delete shared HEXA templates. Needs the worker's ADMIN_KEY; it's kept only for this browser session.</div>
+      <div className="flex gap-2">
+        <input type="password" value={key} onChange={e => setKey(e.target.value)} placeholder="admin key" onKeyDown={e => e.key === 'Enter' && key.trim() && unlock()} autoComplete="off" />
+        <button className="btn" onClick={unlock} disabled={!key.trim() || busy}>Unlock</button>
+      </div>
+      {err && <div className="text-xs text-red-400">{err}</div>}
+    </section>
   )
 }
 

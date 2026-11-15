@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { nanoid } from 'nanoid'
 import { useIsMobile } from '../../store'
+import { classKeyForJob } from '../../data/gmsClasses'
 import { Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, X, RotateCcw, ChevronRight, ListOrdered, Wand2, ScanSearch } from 'lucide-react'
 import { db, defaultHexaProfile, migrateHexaProfile, resolveClass, updateCharacter } from '../../db'
 import { ChartImportDialog, type ImportOutcome } from './ChartImportDialog'
@@ -123,7 +124,8 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
       levels[n.id] = old ? (profile.levels[old.id] ?? 0) : (n.type === 'origin' ? 1 : 0)
     }
     await save({ nodes: o.nodes, levels, order: o.order, autoPath: o.order.length > 0, path: [], pathImage: o.imageDataUrl })
-    if (o.templateId) await updateCharacter(character.id, { classId: `tpl:${o.templateId}` })
+    if (o.templateId) await updateCharacter(character.id, { classId: `tpl:${o.templateId}`, ...(o.classKey ? { classKey: o.classKey } : {}) })
+    else if (o.classKey && !character.classKey) await updateCharacter(character.id, { classKey: o.classKey })
     setImportFile(null)
   }
 
@@ -277,7 +279,7 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
         </div>
       </div>
 
-      {importFile && <ChartImportDialog file={importFile} className={cls?.name ?? character.job ?? 'My class'} onClose={() => setImportFile(null)} onApply={applyImport} />}
+      {importFile && <ChartImportDialog file={importFile} className={cls?.name ?? character.job ?? 'My class'} classKey={character.classKey || classKeyForJob(character.job)} onClose={() => setImportFile(null)} onApply={applyImport} />}
       {editingOrder && <OrderEditor profile={profile} onClose={() => setEditingOrder(false)} onSave={(order) => { save({ order, autoPath: order.length > 0 }); setEditingOrder(false) }} />}
     </div>
   )
