@@ -1,4 +1,4 @@
-import type { PotentialRank, SlotKey } from '../types'
+import type { FlameWeights, PotentialRank, SlotKey } from '../types'
 
 /**
  * Potential line suggestions with values, by slot group, item level tier and rank.
@@ -75,16 +75,18 @@ export function potentialOptionGroups(slot: SlotKey, rank: PotentialRank, reqLev
 }
 
 /** Compact summary of a potential for the grid cell, e.g. "23% STR · 16% CD" */
-export function potentialSummary(lines: string[], mainStat: 'str' | 'dex' | 'int' | 'luk', slot: SlotKey, useMatt = mainStat === 'int'): string {
+export function potentialSummary(lines: string[], mainStat: FlameWeights['mainStat'], slot: SlotKey, useMatt = mainStat === 'int'): string {
   const acc = { main: 0, all: 0, att: 0, boss: 0, ied: 0, cd: 0, dmg: 0, meso: 0, drop: 0, cdr: 0, hp: 0 }
-  const main = mainStat.toUpperCase()
+  const xenon = mainStat === 'xenon'
+  const main = xenon ? 'All' : mainStat.toUpperCase()
+  const mainRe = xenon ? /\b(STR|DEX|LUK)\b/ : new RegExp(`\\b${main}\\b`)
   const isWeaponish = ['weapon', 'secondary', 'emblem'].includes(slot)
   for (const raw of lines) {
     const l = raw.trim(); if (!l) continue
     const m = l.match(/([+-]?\d+(?:\.\d+)?)\s*(%|s\b)/); const n = m ? Math.abs(parseFloat(m[1])) : 0
     const u = l.toUpperCase()
     if (/ALL STAT/.test(u)) acc.all += n
-    else if (new RegExp(`\\b${main}\\b`).test(u)) acc.main += n
+    else if (mainRe.test(u)) acc.main += xenon ? n / 3 : n          // Xenon: a single-stat line is worth ~1/3 of All Stat
     else if (/\bMATT\b|MAGIC ATT/.test(u)) { if (useMatt) acc.att += n }          // MATT only matters for magic classes
     else if (/\bATT\b|ATTACK/.test(u)) { if (!useMatt) acc.att += n }           // ATT only for physical classes
     else if (/BOSS/.test(u)) acc.boss += n
@@ -103,7 +105,7 @@ export function potentialSummary(lines: string[], mainStat: 'str' | 'dex' | 'int
     if (acc.ied) out.push(`${acc.ied}% IED`)
   }
   if (acc.cd) out.push(`${acc.cd}% CD`)
-  const stat = acc.main + acc.all
+  const stat = Math.round((acc.main + (mainStat === 'hp' ? 0 : acc.all)) * 10) / 10   // All Stat % doesn't raise HP
   if (stat) out.push(`${stat}% ${main}`)
   if (acc.cdr) out.push(`-${acc.cdr}s CD`)
   if (acc.meso) out.push(`${acc.meso}% Meso`)

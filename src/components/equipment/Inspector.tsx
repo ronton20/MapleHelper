@@ -6,7 +6,7 @@ import { type PotentialOptionGroup, potentialOptionGroups } from '../../data/pot
 import { flameTarget, hasFlameTarget } from '../../data/flameTargets'
 import { maxStarForce, starGoalPresets, defaultStarGoal } from '../../data/starforce'
 import { newItem } from '../../db'
-import { flameScore, RANK_COLOR, RANK_LABEL } from '../../lib/flame'
+import { flameScore, flameInputKeys, describeWeights, RANK_COLOR, RANK_LABEL } from '../../lib/flame'
 import { ItemSearch } from './ItemSearch'
 
 export function Inspector({ slot, item, character, version, onChange, onClose, mobile = false }: {
@@ -42,6 +42,10 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
 
   const upd = (patch: Partial<ItemInstance>) => onChange({ ...item, ...patch })
   const score = flameScore(item.flame, character.flameWeights)
+  // weapons keep every flame field; other gear only shows what the class's flame score uses
+  // (plus any other field that already holds a value, so nothing is hidden)
+  const flameKeys: (keyof Flame)[] = slot === 'weapon' ? ALL_FLAME_KEYS
+    : [...flameInputKeys(character.flameWeights), ...ALL_FLAME_KEYS.filter(k => item.flame[k] && !flameInputKeys(character.flameWeights).includes(k))]
   const caps = SLOT_CAPS[slot]
   const on = (c: keyof SlotCaps) => capOn(slot, c, item.enabled)
   const optional = (Object.keys(caps) as (keyof SlotCaps)[]).filter(c => caps[c] === 'opt')
@@ -143,7 +147,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
         {on('flames') && (
           <Section title="Flame" right={<Goal value={score} goal={item.flameScoreGoal} label="score" />}>
             <div className="grid grid-cols-4 gap-1.5">
-              {(['str', 'dex', 'int', 'luk', 'att', 'matt', 'allStat', 'bossDmg', 'dmg', 'hp', 'def', 'level'] as (keyof Flame)[]).map(k => (
+              {flameKeys.map(k => (
                 <label key={k} className="text-[10px] text-muted">
                   <span className="block px-0.5 uppercase">{FLAME_LABEL[k]}</span>
                   <input type="number" value={item.flame[k] || ''} placeholder="0" onChange={e => upd({ flame: { ...item.flame, [k]: Number(e.target.value) } })} className="px-1.5 py-1 text-center text-xs text-text" />
@@ -164,7 +168,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
                 <label className="flex items-center gap-2"><input type="checkbox" className="w-auto" checked={item.flameAdvantaged ?? true} onChange={e => { const adv = e.target.checked; const nt = flameTarget(item.reqLevel, adv); upd({ flameAdvantaged: adv, flameScoreGoal: nt.mid }) }} />Flame-advantaged item <span className="text-muted/70">(uncheck for Superior Gollux, Sweetwater, Meister…)</span></label>
               </div>
             ) })() : null}
-            <div className="mt-1 text-[10px] text-muted">Score = {character.flameWeights.mainStat.toUpperCase()} + secondary/12 + {character.flameWeights.attWeight}×ATT + {character.flameWeights.allStatWeight}×All% · targets: Early ≈ 1b avg flames, Mid ≈ 10b, Late = triple T6</div>
+            <div className="mt-1 text-[10px] text-muted">Score = {describeWeights(character.flameWeights)} (change in Settings) · targets: Early ≈ 1b avg flames, Mid ≈ 10b, Late = triple T6</div>
           </Section>
         )}
 
@@ -222,6 +226,7 @@ function PotentialPicker({ index, value, groups, disabled, onChange }: { index: 
   )
 }
 
+const ALL_FLAME_KEYS: (keyof Flame)[] = ['str', 'dex', 'int', 'luk', 'att', 'matt', 'allStat', 'bossDmg', 'dmg', 'hp', 'def', 'level']
 const FLAME_LABEL: Record<keyof Flame, string> = { str: 'STR', dex: 'DEX', int: 'INT', luk: 'LUK', att: 'ATT', matt: 'MATT', allStat: 'All %', bossDmg: 'Boss %', dmg: 'Dmg %', hp: 'HP', mp: 'MP', def: 'DEF', speed: 'Spd', jump: 'Jump', level: '-Lv' }
 
 function clamp(n: number, a: number, b: number) { return Math.min(b, Math.max(a, isNaN(n) ? 0 : n)) }

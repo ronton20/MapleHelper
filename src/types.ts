@@ -43,12 +43,15 @@ export interface Preset {
 }
 
 export interface FlameWeights {
-  mainStat: 'str' | 'dex' | 'int' | 'luk'
+  /** 'xenon' = STR + DEX + LUK all count as main stat; 'hp' = flat HP is the main stat (Demon Avenger) */
+  mainStat: 'str' | 'dex' | 'int' | 'luk' | 'hp' | 'xenon'
   secondaryStat: 'str' | 'dex' | 'int' | 'luk' | 'none'
   secondaryWeight: number
   attWeight: number        // per ATT/MATT point
   allStatWeight: number    // per 1% all stat
   useMatt: boolean
+  /** score points per 1 flat HP — only used when mainStat is 'hp' */
+  hpWeight?: number
 }
 
 export type Region = 'na' | 'eu'

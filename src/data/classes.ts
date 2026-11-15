@@ -36,12 +36,18 @@ export const DEFAULT_WEIGHTS: FlameWeights = STR_WARRIOR
 
 const DEX_BOWMAN: FlameWeights = { mainStat: 'dex', secondaryStat: 'str', secondaryWeight: 1 / 12, attWeight: 3, allStatWeight: 10, useMatt: false }
 const INT_MAGE: FlameWeights = { mainStat: 'int', secondaryStat: 'luk', secondaryWeight: 1 / 12, attWeight: 3, allStatWeight: 10, useMatt: true }
-const DEX_PIRATES = ['corsair', 'mechanic', 'angelic-buster']
+const DEX_PIRATES = ['corsair', 'mechanic', 'angelic-buster', 'mo-xuan']
+/** Xenon: STR, DEX and LUK are all main stats (INT does nothing), so All Stat % is worth roughly double */
+const XENON: FlameWeights = { mainStat: 'xenon', secondaryStat: 'none', secondaryWeight: 0, attWeight: 3, allStatWeight: 20, useMatt: false }
+/** Demon Avenger: flat HP is the main stat (≈17.5 item HP per main-stat point); All Stat % only adds STR */
+const DEMON_AVENGER: FlameWeights = { mainStat: 'hp', secondaryStat: 'str', secondaryWeight: 1 / 12, attWeight: 3, allStatWeight: 1, useMatt: false, hpWeight: 1 / 17.5 }
 
 /** default flame-score weights for a GMS class (from its class type) */
 export function weightsForClass(classKey: string | undefined): FlameWeights {
   const c = classKey ? CLASS_BY_KEY[classKey] : undefined
   if (!c) return DEFAULT_WEIGHTS
+  if (c.key === 'xenon') return XENON
+  if (c.key === 'demon-avenger') return DEMON_AVENGER
   if (c.type === 'Magician') return INT_MAGE
   if (c.type === 'Bowman' || DEX_PIRATES.includes(c.key)) return DEX_BOWMAN
   if (c.type === 'Thief' || c.type === 'Thief/Pirate') return LUK_THIEF

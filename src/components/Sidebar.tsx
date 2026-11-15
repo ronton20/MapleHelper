@@ -4,6 +4,8 @@ import { Plus, Settings, Swords, Hexagon, Trash2, RefreshCw } from 'lucide-react
 import { listTemplates, fetchTemplate, type LibraryEntry } from '../api/library'
 import { CLASS_BY_KEY, classKeyForJob } from '../data/gmsClasses'
 import { ClassOptions } from './ClassOptions'
+import { SidebarFooter } from './SidebarFooter'
+import { weightsForClass } from '../data/classes'
 import { db, createCharacter, deleteCharacter, updateCharacter, getSettings } from '../db'
 import { useUI } from '../store'
 import { lookupCharacter } from '../api/nexon'
@@ -41,6 +43,8 @@ export function Sidebar() {
           <CharRow key={c.id} c={c} active={c.id === selectedCharacterId} onClick={() => { setCharacter(c.id); if (view === 'settings') setView('equipment') }} />
         ))}
       </div>
+
+      <SidebarFooter />
 
       {adding && <AddCharacterDialog onClose={() => setAdding(false)} onCreated={(id) => { setCharacter(id); setAdding(false) }} />}
     </aside>
@@ -130,7 +134,7 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
     }
     localStorage.setItem('maple-helper.lastRegion', region); localStorage.setItem('maple-helper.lastHeroic', heroic ? '1' : '0')
     if (existing) {
-      await updateCharacter(existing.id, { name: name.trim(), job, level, world, imageUrl, classId: dataId || null, classKey, region, heroic })
+      await updateCharacter(existing.id, { name: name.trim(), job, level, world, imageUrl, classId: dataId || null, classKey, region, heroic, ...(classKey !== existing.classKey ? { flameWeights: weightsForClass(classKey) } : {}) })
       onCreated(existing.id)
     } else {
       const c = await createCharacter({ name: name.trim(), job, level, world, imageUrl, classId: dataId || null, classKey, region, heroic })

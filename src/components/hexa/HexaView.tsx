@@ -3,9 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { nanoid } from 'nanoid'
 import { useIsMobile } from '../../store'
 import { classKeyForJob } from '../../data/gmsClasses'
-import { Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, X, RotateCcw, ChevronRight, ListOrdered, Wand2, ScanSearch } from 'lucide-react'
+import { Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, X, RotateCcw, ChevronRight, ListOrdered, Wand2, ScanSearch, Share2 } from 'lucide-react'
 import { db, defaultHexaProfile, migrateHexaProfile, resolveClass, updateCharacter } from '../../db'
 import { ChartImportDialog, type ImportOutcome } from './ChartImportDialog'
+import { ShareTemplateDialog } from './ShareTemplateDialog'
 import { GENERIC_NODES } from '../../data/classes'
 import { costBetween, totalToMax, maxLevel, GROUPS, GROUP_LABEL, GROUP_COLOR, GROUP_OF, GROUP_TYPES, NODE_TYPE_LABEL, STAT_FRAGS_PER_LEVEL } from '../../data/hexaCosts'
 import type { Character, HexaProfile, HexaNodeDef, HexaNodeType, HexaCheckpoint, HexaOrderStep } from '../../types'
@@ -35,6 +36,7 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
   const fileRef = useRef<HTMLInputElement>(null)
   const [showImage, setShowImage] = useState(true)
   const [editingOrder, setEditingOrder] = useState(false)
+  const [sharing, setSharing] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const mobile = useIsMobile()
   const [tab, setTab] = useState<'nodes' | 'path' | 'image'>('path')
@@ -207,6 +209,7 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
               <div className="flex items-center gap-1">
                 <button className={`btn btn-sm ${profile.autoPath ? 'btn-primary' : ''}`} title="Derive checkpoints from the leveling order and current levels" onClick={() => save({ autoPath: !profile.autoPath })}><Wand2 size={12} />Auto</button>
                 <button className="btn btn-sm" onClick={() => setEditingOrder(true)}><ListOrdered size={12} />Order ({profile.order.length})</button>
+                <button className="btn btn-sm" title="Share this setup (nodes, icons, leveling order) with other players of the class" onClick={() => setSharing(true)}><Share2 size={12} />Share</button>
                 {!profile.autoPath && <button className="btn btn-sm" onClick={addCheckpoint}><Plus size={12} />Checkpoint</button>}
               </div>
             </div>
@@ -280,6 +283,7 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
       </div>
 
       {importFile && <ChartImportDialog file={importFile} className={cls?.name ?? character.job ?? 'My class'} classKey={character.classKey || classKeyForJob(character.job)} onClose={() => setImportFile(null)} onApply={applyImport} />}
+      {sharing && <ShareTemplateDialog character={character} profile={profile} onClose={() => setSharing(false)} />}
       {editingOrder && <OrderEditor profile={profile} onClose={() => setEditingOrder(false)} onSave={(order) => { save({ order, autoPath: order.length > 0 }); setEditingOrder(false) }} />}
     </div>
   )

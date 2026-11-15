@@ -66,6 +66,11 @@ Setup: in Cloudflare create a **Workers KV** namespace and bind it to the worker
   enter the key → edit save names, reassign classes, rename/retype nodes, edit the leveling order, replace from JSON,
   download or delete. The key is kept only for the browser session.
 
+## Contact links & Buy Me a Coffee
+
+Edit `src/config.ts`: `SOCIALS.discord` (shown with a copy button at the bottom of the sidebar) and
+`BUY_ME_A_COFFEE` (your buymeacoffee.com page name — the yellow button only shows once this is set).
+
 ## Structure
 
 ```

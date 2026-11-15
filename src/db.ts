@@ -44,6 +44,18 @@ db.version(3).stores({
 })
 
 /** built-in class or stored template, by id ('tpl:<id>' for templates) */
+// v4: Xenon (STR+DEX+LUK) and Demon Avenger (HP) get their own flame-score modes
+db.version(4).stores({
+  characters: 'id, name, updatedAt',
+  hexa: 'characterId',
+  settings: 'id',
+  templates: 'id, name',
+}).upgrade(async tx => {
+  await tx.table('characters').toCollection().modify((c: Character) => {
+    if (c.classKey === 'xenon' || c.classKey === 'demon-avenger') c.flameWeights = weightsForClass(c.classKey)
+  })
+})
+
 export async function resolveClass(classId: string | null): Promise<{ id: string; name: string; nodes: HexaNodeDef[]; order?: HexaOrderStep[]; orderSource?: string; flameWeights?: FlameWeights } | undefined> {
   if (!classId) return undefined
   if (classId.startsWith('tpl:')) {

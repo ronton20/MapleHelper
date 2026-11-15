@@ -8,6 +8,7 @@ import { ShieldCheck } from 'lucide-react'
 import { db, getSettings, DEFAULT_SETTINGS, BUILD_PROXY_URL, exportAll, importAll, updateCharacter } from '../db'
 import { useUI } from '../store'
 import { weightsForClass } from '../data/classes'
+import { DA_HP_WEIGHT, describeWeights } from '../lib/flame'
 import type { FlameWeights } from '../types'
 
 export function SettingsView() {
@@ -107,16 +108,20 @@ function AdminSection() {
   )
 }
 
+const MAIN_OPTIONS: [FlameWeights['mainStat'], string][] = [['str', 'STR'], ['dex', 'DEX'], ['int', 'INT'], ['luk', 'LUK'], ['xenon', 'STR + DEX + LUK (Xenon)'], ['hp', 'HP (Demon Avenger)']]
+
 function WeightsEditor({ w, onChange }: { w: FlameWeights; onChange: (w: FlameWeights) => void }) {
   const stats = ['str', 'dex', 'int', 'luk'] as const
   return (
     <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-3">
-      <label><div className="label mb-1">Main stat</div><select value={w.mainStat} onChange={e => onChange({ ...w, mainStat: e.target.value as FlameWeights['mainStat'] })}>{stats.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></label>
-      <label><div className="label mb-1">Secondary stat</div><select value={w.secondaryStat} onChange={e => onChange({ ...w, secondaryStat: e.target.value as FlameWeights['secondaryStat'] })}><option value="none">none</option>{stats.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></label>
-      <label><div className="label mb-1">Secondary weight</div><input type="number" step="0.01" value={Number(w.secondaryWeight.toFixed(3))} onChange={e => onChange({ ...w, secondaryWeight: Number(e.target.value) })} /></label>
-      <label><div className="label mb-1">ATT weight</div><input type="number" step="0.1" value={w.attWeight} onChange={e => onChange({ ...w, attWeight: Number(e.target.value) })} /></label>
+      <label><div className="label mb-1">Main stat</div><select value={w.mainStat} onChange={e => { const m = e.target.value as FlameWeights['mainStat']; onChange({ ...w, mainStat: m, ...(m === 'xenon' ? { secondaryStat: 'none' as const } : {}), ...(m === 'hp' && !w.hpWeight ? { hpWeight: DA_HP_WEIGHT } : {}) }) }}>{MAIN_OPTIONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
+      {w.mainStat === 'hp' && <label><div className="label mb-1">Points per 1 HP</div><input type="number" step="0.001" value={Number((w.hpWeight ?? DA_HP_WEIGHT).toFixed(4))} onChange={e => onChange({ ...w, hpWeight: Number(e.target.value) })} /></label>}
+      {w.mainStat !== 'xenon' && <label><div className="label mb-1">Secondary stat</div><select value={w.secondaryStat} onChange={e => onChange({ ...w, secondaryStat: e.target.value as FlameWeights['secondaryStat'] })}><option value="none">none</option>{stats.map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}</select></label>}
+      {w.mainStat !== 'xenon' && w.secondaryStat !== 'none' && <label><div className="label mb-1">Secondary weight</div><input type="number" step="0.01" value={Number(w.secondaryWeight.toFixed(3))} onChange={e => onChange({ ...w, secondaryWeight: Number(e.target.value) })} /></label>}
+      <label><div className="label mb-1">{w.useMatt ? 'MATT' : 'ATT'} weight</div><input type="number" step="0.1" value={w.attWeight} onChange={e => onChange({ ...w, attWeight: Number(e.target.value) })} /></label>
       <label><div className="label mb-1">All stat % weight</div><input type="number" step="0.1" value={w.allStatWeight} onChange={e => onChange({ ...w, allStatWeight: Number(e.target.value) })} /></label>
       <label className="flex items-end gap-2 pb-2"><input type="checkbox" checked={w.useMatt} onChange={e => onChange({ ...w, useMatt: e.target.checked })} className="w-auto" />Use MATT instead of ATT</label>
+      <div className="col-span-full text-[11px] text-muted">Score = {describeWeights(w)}</div>
     </div>
   )
 }
