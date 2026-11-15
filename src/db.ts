@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { nanoid } from 'nanoid'
 import type { Character, HexaProfile, Settings, Preset, ItemInstance, Flame, FlameWeights, HexaNodeDef, HexaOrderStep, ClassTemplate, Region } from './types'
-import { CLASSES, GENERIC_NODES, DEFAULT_WEIGHTS } from './data/classes'
+import { GENERIC_NODES, weightsForClass } from './data/classes'
 
 export const db = new Dexie('maple-helper') as Dexie & {
   characters: EntityTable<Character, 'id'>
@@ -21,6 +21,27 @@ db.version(2).stores({
   settings: 'id',
   templates: 'id, name',
 })
+// v3: the app no longer ships built-in HEXA data (Hero / Ren / Night Walker). Characters that used it
+// get a template saved on the device, made from their own current nodes and order, so nothing is lost.
+const FORMER_BUILTINS: Record<string, { name: string; classKey: string }> = {
+  hero: { name: 'Hero', classKey: 'hero' }, ren: { name: 'Ren', classKey: 'ren' }, nightwalker: { name: 'Night Walker', classKey: 'night-walker' },
+}
+db.version(3).stores({
+  characters: 'id, name, updatedAt',
+  hexa: 'characterId',
+  settings: 'id',
+  templates: 'id, name',
+}).upgrade(async tx => {
+  const chars = await tx.table('characters').toArray() as Character[]
+  for (const c of chars) {
+    const b = c.classId ? FORMER_BUILTINS[c.classId] : undefined
+    if (!b) continue
+    const prof = await tx.table('hexa').get(c.id) as HexaProfile | undefined
+    const tplId = `former-${c.classId}-${c.id}`
+    await tx.table('templates').put({ id: tplId, name: `${b.name} (former built-in)`, classKey: b.classKey, nodes: prof?.nodes ?? GENERIC_NODES, order: prof?.order ?? [], source: 'former built-in data', createdAt: Date.now() } satisfies ClassTemplate)
+    await tx.table('characters').update(c.id, { classId: `tpl:${tplId}`, classKey: c.classKey || b.classKey })
+  }
+})
 
 /** built-in class or stored template, by id ('tpl:<id>' for templates) */
 export async function resolveClass(classId: string | null): Promise<{ id: string; name: string; nodes: HexaNodeDef[]; order?: HexaOrderStep[]; orderSource?: string; flameWeights?: FlameWeights } | undefined> {
@@ -29,7 +50,7 @@ export async function resolveClass(classId: string | null): Promise<{ id: string
     const t = await db.templates.get(classId.slice(4))
     return t ? { id: classId, name: t.name, nodes: t.nodes, order: t.order, orderSource: t.source } : undefined
   }
-  return CLASSES.find(c => c.id === classId)
+  return undefined
 }
 
 /** build-time default for the worker URL (VITE_PROXY_URL in .env or CI env) – the Settings field overrides it */
@@ -66,7 +87,7 @@ export function newPreset(name = 'Main'): Preset {
 export async function createCharacter(input: { name: string; world?: string; job?: string; level?: number; imageUrl?: string; classId?: string | null; classKey?: string; region?: Region; heroic?: boolean }): Promise<Character> {
   const preset = newPreset()
   const cls = await resolveClass(input.classId ?? null)
-  const weights: FlameWeights = cls?.flameWeights ?? DEFAULT_WEIGHTS
+  const weights: FlameWeights = weightsForClass(input.classKey)
   const c: Character = {
     id: nanoid(10),
     name: input.name,

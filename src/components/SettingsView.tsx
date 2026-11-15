@@ -7,7 +7,7 @@ import { adminUnlock, getAdminKey } from '../api/library'
 import { ShieldCheck } from 'lucide-react'
 import { db, getSettings, DEFAULT_SETTINGS, BUILD_PROXY_URL, exportAll, importAll, updateCharacter } from '../db'
 import { useUI } from '../store'
-import { CLASSES, DEFAULT_WEIGHTS } from '../data/classes'
+import { weightsForClass } from '../data/classes'
 import type { FlameWeights } from '../types'
 
 export function SettingsView() {
@@ -54,7 +54,7 @@ export function SettingsView() {
         <section className="card space-y-3 p-4">
           <div className="flex items-center justify-between">
             <div className="label">Flame score weights · {character.name}</div>
-            <button className="btn btn-sm" onClick={() => updateCharacter(character.id, { flameWeights: CLASSES.find(c => c.id === character.classId)?.flameWeights ?? DEFAULT_WEIGHTS })}>Reset to defaults</button>
+            <button className="btn btn-sm" onClick={() => updateCharacter(character.id, { flameWeights: weightsForClass(character.classKey) })}>Reset to defaults</button>
           </div>
           <WeightsEditor w={character.flameWeights} onChange={w => updateCharacter(character.id, { flameWeights: w })} />
           <div className="text-[11px] text-muted">Defaults follow the community rule of thumb: 1 main stat = 1, 12 secondary = 1, 1 ATT = 3, 1% all stat = 10.</div>

@@ -86,6 +86,3 @@ export function classKeyForJob(job: string | undefined | null): string {
   }
   return ''
 }
-
-/** built-in seeded class ids → GMS class keys */
-export const BUILTIN_TO_KEY: Record<string, string> = { hero: 'hero', ren: 'ren', nightwalker: 'night-walker' }

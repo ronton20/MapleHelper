@@ -60,7 +60,7 @@ Setup: in Cloudflare create a **Workers KV** namespace and bind it to the worker
 
 - **Sharing:** in the chart-import popup pick the class, give the save a name, tick "Share with other <class> players".
   Optional `PUBLISH_KEY` secret on the worker restricts who can publish (enter it in Settings).
-- **Using:** in Add/Edit character pick the class; the "HEXA data" list then shows only that class's built-in data,
+- **Using:** in Add/Edit character pick the class; the "HEXA data" list then shows only that class's
   data saved on this device, and shared saves. Shared data is downloaded when you save the character.
 - **Admin panel:** add an `ADMIN_KEY` secret on the worker (any long random string). In the app: Settings → Admin →
   enter the key → edit save names, reassign classes, rename/retype nodes, edit the leveling order, replace from JSON,
@@ -71,7 +71,7 @@ Setup: in Cloudflare create a **Workers KV** namespace and bind it to the worker
 ```
 src/data/slots.ts       grid layout + slot → item categories
 src/data/hexaCosts.ts   fragment/erda cost tables per node type
-src/data/classes.ts     seeded HEXA node lists (Hero, Ren, Night Walker) + flame weights
+src/data/classes.ts     generic HEXA node list + default flame weights per class type
 src/db.ts               Dexie schema, export/import
 src/api/                maplestory.io (icons, search) and nexon rankings (via proxy)
 src/components/         Sidebar, equipment/ (grid, inspector, presets, search), hexa/, SettingsView

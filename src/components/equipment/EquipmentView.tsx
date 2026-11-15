@@ -12,7 +12,6 @@ import { classKeyForJob, CLASS_BY_KEY } from '../../data/gmsClasses'
 import { PresetBar } from './PresetBar'
 import { AddCharacterDialog } from '../Sidebar'
 import { lookupCharacter } from '../../api/nexon'
-import { classForJob } from '../../data/classes'
 
 export function EquipmentView({ character }: { character: Character }) {
   const { selectedSlot, setSlot } = useUI()
@@ -28,7 +27,7 @@ export function EquipmentView({ character }: { character: Character }) {
       const s = await getSettings()
       const r = await lookupCharacter(character.name, s.proxyUrl, character.heroic ?? true, character.region ?? 'eu')
       const key = character.classKey || classKeyForJob(r.job)
-      await updateCharacter(character.id, { job: CLASS_BY_KEY[key]?.name ?? r.job, level: r.level, world: r.world, imageUrl: r.imageUrl, classId: character.classId ?? classForJob(r.job)?.id ?? null, classKey: key || undefined })
+      await updateCharacter(character.id, { job: CLASS_BY_KEY[key]?.name ?? r.job, level: r.level, world: r.world, imageUrl: r.imageUrl, classKey: key || undefined })
     } catch (e) { alert((e as Error).message) } finally { setSyncing(false) }
   }
 

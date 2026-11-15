@@ -2,12 +2,11 @@ import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, Settings, Swords, Hexagon, Trash2, RefreshCw } from 'lucide-react'
 import { listTemplates, fetchTemplate, type LibraryEntry } from '../api/library'
-import { CLASS_BY_KEY, classKeyForJob, BUILTIN_TO_KEY } from '../data/gmsClasses'
+import { CLASS_BY_KEY, classKeyForJob } from '../data/gmsClasses'
 import { ClassOptions } from './ClassOptions'
 import { db, createCharacter, deleteCharacter, updateCharacter, getSettings } from '../db'
 import { useUI } from '../store'
 import { lookupCharacter } from '../api/nexon'
-import { CLASSES, classForJob } from '../data/classes'
 import type { Character, Region } from '../types'
 
 export function Sidebar() {
@@ -87,8 +86,7 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   const [note, setNote] = useState('')
   const [classKey, setClassKey] = useState<string>(existing?.classKey || classKeyForJob(existing?.job) || '')
   const allTemplates = useLiveQuery(() => db.templates.orderBy('name').toArray(), []) ?? []
-  // only data for the chosen class: built-in seed, local templates of that class, shared templates of that class
-  const builtins = CLASSES.filter(c => BUILTIN_TO_KEY[c.id] === classKey)
+  // only data for the chosen class: templates saved on this device and shared templates of that class
   const localTemplates = allTemplates.filter(t => t.classKey === classKey)
   const [lib, setLib] = useState<LibraryEntry[]>([])
   const [libState, setLibState] = useState<'idle' | 'loading' | 'error'>('idle')
@@ -103,10 +101,8 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   }, [classKey])
   // when the class changes, drop a data choice that belongs to another class
   useEffect(() => {
-    if (!classId) { if (builtins[0]) setClassId(builtins[0].id); return }   // preselect built-in data for the class
-    if (classId.startsWith('lib:')) return
-    const ok = builtins.some(b => b.id === classId) || localTemplates.some(t => `tpl:${t.id}` === classId)
-    if (!ok && (existing?.classId !== classId)) setClassId(builtins[0]?.id ?? '')
+    if (!classId || classId.startsWith('lib:')) return
+    if (!localTemplates.some(t => `tpl:${t.id}` === classId) && existing?.classId !== classId) setClassId('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classKey])
 
@@ -118,7 +114,6 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
       setLevel(r.level); setWorld(r.world); setImageUrl(r.imageUrl); setName(r.name)
       const key = classKeyForJob(r.job)
       if (key) { setClassKey(key); setNote('') } else setNote(r.job ? `Rankings say "${r.job}" — pick the matching class.` : 'Pick the class.')
-      const cls = classForJob(r.job); if (cls) setClassId(cls.id)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
@@ -188,7 +183,6 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
           <div className="label mb-1">HEXA data</div>
           <select value={classId} onChange={e => setClassId(e.target.value)} disabled={!classKey}>
             <option value="">Generic (rename nodes yourself)</option>
-            {builtins.length > 0 && <optgroup label="Built-in">{builtins.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
             {localTemplates.length > 0 && <optgroup label="Saved on this device">{localTemplates.map(t => <option key={t.id} value={`tpl:${t.id}`}>{t.name}</option>)}</optgroup>}
             {lib.length > 0 && <optgroup label="Shared library">{lib.map(e => <option key={e.id} value={`lib:${e.id}`}>{e.name} · {e.steps} steps</option>)}</optgroup>}
           </select>
@@ -196,8 +190,8 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
         <div className="text-[11px] text-muted">
           {!classKey ? 'Pick the class (Fetch fills it in) to see HEXA data made for it.'
             : libState === 'loading' ? `Looking for shared ${CLASS_BY_KEY[classKey]?.name ?? ''} data…`
-            : libState === 'error' ? 'Shared library unavailable right now — built-in and saved data still work.'
-            : `${builtins.length + localTemplates.length + lib.length} option(s) for ${CLASS_BY_KEY[classKey]?.name ?? classKey}. Shared data is downloaded when you save.`}
+            : libState === 'error' ? 'Shared library unavailable right now — data saved on this device still works.'
+            : `${localTemplates.length + lib.length} option(s) for ${CLASS_BY_KEY[classKey]?.name ?? classKey}. Shared data is downloaded when you save.`}
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button className="btn" onClick={onClose}>Cancel</button>
