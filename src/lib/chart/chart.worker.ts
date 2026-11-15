@@ -6,7 +6,7 @@
  */
 import { createWorker, PSM, type Worker as TWorker } from 'tesseract.js'
 import { analyzeChart, type OcrWord, type RefIcon } from './analyze'
-import { prepareForOcr } from './ocrprep'
+import { prepareForOcr, prepareBadge } from './ocrprep'
 import type { Pixels, Box } from './detect'
 
 interface AnalyzeMsg { type: 'analyze'; pixels: { width: number; height: number; data: ArrayBuffer }; refs: { name: string; type: RefIcon['type']; width: number; height: number; data: ArrayBuffer }[]; tess: { workerPath: string; corePath: string; langPath: string } }
@@ -20,16 +20,16 @@ self.onmessage = async (ev: MessageEvent<AnalyzeMsg>) => {
   try {
     postMessage({ type: 'progress', msg: 'Loading OCR engine…', frac: 0.02 })
     tw = await createWorker('eng', 1, { workerPath: m.tess.workerPath, corePath: m.tess.corePath, langPath: m.tess.langPath, gzip: true, logger: () => {} })
-    const ocr = async (box: Box, mode: 'line' | 'block' | 'word' | 'wordgray', digitsOnly: boolean, dropSides = false): Promise<OcrWord[]> => {
-      const scale = mode === 'block' ? 3 : 4
-      const bm = prepareForOcr(p, box, scale, dropSides, mode === 'word' || mode === 'line')
+    const ocr = async (box: Box, mode: 'line' | 'block' | 'word' | 'wordgray' | 'badge', digitsOnly: boolean, dropSides = false): Promise<OcrWord[]> => {
+      const scale = mode === 'block' ? 3 : mode === 'badge' ? 6 : 4
+      const bm = mode === 'badge' ? prepareBadge(p, box, scale) : prepareForOcr(p, box, scale, dropSides, mode === 'word' || mode === 'line')
       const canvas = new OffscreenCanvas(bm.width, bm.height)
       const ctx = canvas.getContext('2d')!
       const img = ctx.createImageData(bm.width, bm.height)
       for (let i = 0; i < bm.gray.length; i++) { img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = bm.gray[i]; img.data[i * 4 + 3] = 255 }
       ctx.putImageData(img, 0, 0)
       const blob = await canvas.convertToBlob({ type: 'image/png' })
-      await tw!.setParameters({ tessedit_pageseg_mode: mode === 'line' ? PSM.SINGLE_LINE : mode === 'word' || mode === 'wordgray' ? PSM.SINGLE_WORD : PSM.SINGLE_BLOCK, tessedit_char_whitelist: digitsOnly ? '0123456789' : '' })
+      await tw!.setParameters({ tessedit_pageseg_mode: mode === 'line' ? PSM.SINGLE_LINE : mode === 'word' || mode === 'wordgray' || mode === 'badge' ? PSM.SINGLE_WORD : PSM.SINGLE_BLOCK, tessedit_char_whitelist: digitsOnly ? '0123456789' : '' })
       const r = await tw!.recognize(blob, {}, { blocks: true })
       const words = (r.data.blocks ?? []).flatMap(b => b.paragraphs.flatMap(pp => pp.lines.flatMap(l => l.words)))
       const bx = Math.max(0, Math.round(box.x)), by = Math.max(0, Math.round(box.y))

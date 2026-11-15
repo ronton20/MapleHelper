@@ -16,6 +16,8 @@ export interface Detection {
   legend: LegendEntry[]
   legendBox: Box | null
   clusters: { rep: SeqTile; members: SeqTile[]; legendIdx: number }[]
+  /** tiles carry their level in a small badge in the icon's bottom-right corner (no labels under tiles) */
+  badges?: boolean
 }
 
 const SIG = 10
@@ -170,8 +172,115 @@ export function shiftedSignatures(p: Pixels, t: Box): Float32Array[] {
 }
 export function sigDistMulti(a: Float32Array[], b: Float32Array) { let m = Infinity; for (const s of a) { const d = sigDist(s, b); if (d < m) m = d } return m }
 
+
+const wrapP = (d: number, P: number) => ((d % P) + P * 1.5) % P - P / 2
+
+/**
+ * Charts drawn as a strict grid (e.g. HEXA planner exports with coloured frames) give jittery / partial
+ * square hits. When the raw hits are clearly off a regular pitch, fit the grid instead: estimate the pitch,
+ * slide each row (shared pitch) to where icon outlines are strongest, and keep cells with a real outline.
+ * Returns null when the raw rows are already regular (the normal case) so other chart styles are untouched.
+ */
+function regularizeRows(p: Pixels, g: Grad, rows: Tile[][], size: number): Tile[][] | null {
+  const gaps = rows.flatMap(r => r.slice(1).map((t, i) => t.cx - r[i].cx))
+  if (gaps.length < 6) return null
+  const m0 = median(gaps)
+  const est = gaps.map(gp => gp / Math.max(1, Math.round(gp / m0))).filter(e => e > m0 * 0.75 && e < m0 * 1.25)
+  const P0 = median(est)
+  // how far off-grid are the raw hits?
+  let off = 0, n = 0
+  for (const r of rows) {
+    let sx = 0, sy = 0
+    for (const t of r) { const a = (t.cx / P0) * 2 * Math.PI; sx += Math.cos(a); sy += Math.sin(a) }
+    const ph = (Math.atan2(sy, sx) / (2 * Math.PI)) * P0
+    for (const t of r) { if (Math.abs(wrapP(t.cx - ph, P0)) > P0 * 0.12) off++; n++ }
+  }
+  if (off / n < 0.15) return null
+  // grouped layouts (wider gaps at arrows / section breaks) are off a single pitch too, but their rows
+  // are detected consistently: only snap when full rows disagree on their tile count (misdetection)
+  const counts = rows.slice(0, -1).map(r => r.length)
+  if (counts.length < 2 || Math.max(...counts) - Math.min(...counts) < 2) return null
+
+  // rows: vertical pitch from row centres, then every row position across the image
+  const cys = rows.map(r => median(r.map(t => t.cy)))
+  const rg = cys.slice(1).map((c, i) => c - cys[i])
+  const rm0 = median(rg)
+  const PY = median(rg.map(gp => gp / Math.max(1, Math.round(gp / rm0))).filter(e => e > rm0 * 0.75 && e < rm0 * 1.25)) || P0
+  const rowYs: number[] = []
+  for (let y = cys[0] - Math.floor(cys[0] / PY) * PY; y < p.height; y += PY) rowYs.push(y)
+
+  const fitRow = (cy0: number, P: number, S: number) => {
+    let best = { score: -1, shift: 0, dy: 0, cells: [] as { cx: number; cy: number; sc: number }[] }
+    for (let dy = -6; dy <= 6; dy++) for (let shift = 0; shift < P; shift++) {
+      const cells: { cx: number; cy: number; sc: number }[] = []; let tot = 0
+      for (let cx = shift + S / 2; cx + S / 2 < p.width; cx += P) {
+        const sc = outlineScore(g, Math.round(cx - S / 2), Math.round(cy0 + dy - S / 2), S)
+        cells.push({ cx, cy: cy0 + dy, sc }); tot += sc
+      }
+      if (tot > best.score) best = { score: tot, shift, dy, cells }
+    }
+    return best
+  }
+  // shared pitch + size: pick the combination that explains the outlines best
+  let bestAll: { total: number; P: number; S: number; rows: ReturnType<typeof fitRow>[] } | null = null
+  // candidate sizes: the detected square size, and frame-sized squares (most of the pitch) – framed tiles
+  const F = Math.round(P0 * 0.87)
+  for (const S of [size - 2, size, size + 2, size + 4, F - 2, F - 1, F, F + 1, F + 2]) for (let P = P0 - 1.5; P <= P0 + 1.5; P += 0.25) {
+    const fits = rowYs.map(y => fitRow(y, P, S)); const total = fits.reduce((a, f) => a + f.score, 0)
+    if (!bestAll || total > bestAll.total) bestAll = { total, P, S, rows: fits }
+  }
+  if (!bestAll) return null
+  const allSc = bestAll.rows.flatMap(f => f.cells.map(c => c.sc)).sort((a, b) => b - a)
+  const ref = allSc[Math.floor(allSc.length * 0.1)] || 1
+  const S = bestAll.S
+  const kept = bestAll.rows.map(f => f.cells.filter(c => c.sc > ref * 0.35))
+  // framed tiles: find the icon square inside the frame (same inset for every tile → median over all)
+  let inS = S, inDx = 0, inDy = 0
+  if (S > size * 1.3) {
+    const tally = new Map<string, number>()
+    for (const c of kept.flat()) {
+      let b = { sc: -1, k: '' }
+      for (let s2 = Math.round(S * 0.5); s2 <= Math.round(S * 0.8); s2++) for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+        const sc = outlineScore(g, Math.round(c.cx - s2 / 2 + dx), Math.round(c.cy - s2 / 2 + dy), s2)
+        if (sc > b.sc) b = { sc, k: `${s2},${dx},${dy}` }
+      }
+      tally.set(b.k, (tally.get(b.k) ?? 0) + 1)
+    }
+    const top = [...tally.entries()].sort((a, b) => b[1] - a[1])[0]
+    if (top) [inS, inDx, inDy] = top[0].split(',').map(Number)
+  }
+  const out = kept.map(r => r.map(c => {
+    const x = Math.round(c.cx - inS / 2 + inDx), y = Math.round(c.cy - inS / 2 + inDy)
+    return { x, y, w: inS, h: inS, cx: x + inS / 2, cy: y + inS / 2, score: c.sc }
+  })).filter(r => r.length)
+  return out.length ? out : null
+}
+
+/** level badge in the icon's bottom-right corner? (dark pill over the icon; gold for max level) */
+function hasLevelBadges(p: Pixels, tiles: Box[]): boolean {
+  const darkFrac = (x0: number, y0: number, x1: number, y1: number) => {
+    let dk = 0, n = 0
+    for (let y = Math.round(y0); y < Math.round(y1); y++) for (let x = Math.round(x0); x < Math.round(x1); x++) {
+      if (x < 0 || y < 0 || x >= p.width || y >= p.height) continue
+      const i = (y * p.width + x) * 4; if (luma(p.data, i) < 60) dk++; n++
+    }
+    return n ? dk / n : 0
+  }
+  let yes = 0
+  for (const t of tiles) {
+    const br = darkFrac(t.x + t.w * 0.55, t.y + t.h * 0.72, t.x + t.w * 1.05, t.y + t.h * 0.98)
+    const bl = darkFrac(t.x + t.w * 0.05, t.y + t.h * 0.3, t.x + t.w * 0.45, t.y + t.h * 0.6)
+    if (br > 0.45 && bl < 0.35) yes++
+  }
+  return yes >= Math.max(3, tiles.length * 0.4)
+}
+/** box used for icon matching: in badge charts only the top of the icon (badge / "+" marker excluded) */
+export function matchBox(t: Box, badges: boolean): Box {
+  return badges ? { x: t.x + Math.round(t.w * 0.08), y: t.y + Math.round(t.h * 0.04), w: Math.round(t.w * 0.84), h: Math.round(t.h * 0.62) } : t
+}
+
 export function detect(p: Pixels): Detection {
-  const { main, size, all } = findSquares(p)
+  const { main, size, all, g } = findSquares(p)
   const empty: Detection = { tileSize: 0, rows: [], seq: [], legend: [], legendBox: null, clusters: [] }
   if (main.length < 3) return empty
 
@@ -197,11 +306,15 @@ export function detect(p: Pixels): Detection {
     const g = median(gaps)
     return r.filter((t, i) => { const dl = i > 0 ? t.cx - r[i - 1].cx : Infinity; const dr = i < r.length - 1 ? r[i + 1].cx - t.cx : Infinity; return Math.min(dl, dr) < g * 1.9 && Math.min(dl, dr) > g * 0.45 })
   }).filter(r => r.length >= 3)
+  const grid = regularizeRows(p, g, rows, size)
+  if (grid) rows = grid
+  const badges = hasLevelBadges(p, rows.flat())
+  const tileSize = grid ? rows[0][0].w : size
 
   // sequence tiles with signatures
   const seq: SeqTile[] = []
   let idx = 0
-  const srows: SeqTile[][] = rows.map((r, ri) => r.map((t, ci) => { const s: SeqTile = { ...t, row: ri, col: ci, index: idx++, sig: signature(p, t), sigs: shiftedSignatures(p, t), nsig: normSignature(p, t), nsigs: shiftedNorm(p, t), cluster: -1, legendIdx: -1 }; seq.push(s); return s }))
+  const srows: SeqTile[][] = rows.map((r, ri) => r.map((t, ci) => { const s: SeqTile = { ...t, row: ri, col: ci, index: idx++, sig: signature(p, t), sigs: shiftedSignatures(p, t), nsig: normSignature(p, matchBox(t, badges)), nsigs: shiftedNorm(p, matchBox(t, badges)), cluster: -1, legendIdx: -1 }; seq.push(s); return s }))
 
   // clustering by signature (identical icons are ~0 apart, different icons > 25)
   const thr = 0.3
@@ -284,5 +397,5 @@ export function detect(p: Pixels): Detection {
     for (const s of seq) { s.cluster = newIndex[remap[s.cluster]]; s.legendIdx = merged[s.cluster].legendIdx }
     clusters.length = 0; clusters.push(...merged)
   } else { legend.length = 0 }
-  return { tileSize: size, rows: srows, seq, legend, legendBox, clusters }
+  return { tileSize: badges || grid ? tileSize : size, rows: srows, seq, legend, legendBox, clusters, badges }
 }

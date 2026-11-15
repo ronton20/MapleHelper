@@ -4,13 +4,13 @@ import { PNG } from 'pngjs'
 import { createWorker, PSM } from 'tesseract.js'
 import { analyzeChart, type OcrWord } from '../src/lib/chart/analyze'
 import type { Box } from '../src/lib/chart/detect'
-import { prepareForOcr } from '../src/lib/chart/ocrprep'
+import { prepareForOcr, prepareBadge } from '../src/lib/chart/ocrprep'
 
 const png = PNG.sync.read(fs.readFileSync(process.argv[2]))
 const p = { width: png.width, height: png.height, data: png.data }
 
-function crop(b: Box, scale: number, dropSides = false, binary = false): Buffer {
-  const bm = prepareForOcr(p, b, scale, dropSides, binary)
+function crop(b: Box, scale: number, dropSides = false, binary = false, badge = false): Buffer {
+  const bm = badge ? prepareBadge(p, b, scale) : prepareForOcr(p, b, scale, dropSides, binary)
   const out = new PNG({ width: bm.width, height: bm.height })
   for (let i = 0; i < bm.gray.length; i++) { out.data[i * 4] = out.data[i * 4 + 1] = out.data[i * 4 + 2] = bm.gray[i]; out.data[i * 4 + 3] = 255 }
   if (process.env.DUMP) fs.writeFileSync(`/tmp/band_${b.y}_${Math.round(b.w)}.png`, PNG.sync.write(out))
@@ -19,10 +19,10 @@ function crop(b: Box, scale: number, dropSides = false, binary = false): Buffer 
 
 async function main() {
   const worker = await createWorker('eng', 1, { langPath: 'public/tessdata', gzip: true, cachePath: '/tmp/tesscache', logger: () => {} })
-  const ocr = async (box: Box, mode: 'line' | 'block' | 'word' | 'wordgray', digitsOnly: boolean, dropSides = false): Promise<OcrWord[]> => {
-    const scale = mode === 'block' ? 3 : 4
-    await worker.setParameters({ tessedit_pageseg_mode: mode === 'line' ? PSM.SINGLE_LINE : mode === 'word' || mode === 'wordgray' ? PSM.SINGLE_WORD : PSM.SINGLE_BLOCK, tessedit_char_whitelist: digitsOnly ? '0123456789' : '' })
-    const r = await worker.recognize(crop(box, scale, dropSides, mode === 'word' || mode === 'line'), {}, { blocks: true })
+  const ocr = async (box: Box, mode: 'line' | 'block' | 'word' | 'wordgray' | 'badge', digitsOnly: boolean, dropSides = false): Promise<OcrWord[]> => {
+    const scale = mode === 'block' ? 3 : mode === 'badge' ? 6 : 4
+    await worker.setParameters({ tessedit_pageseg_mode: mode === 'line' ? PSM.SINGLE_LINE : mode === 'word' || mode === 'wordgray' || mode === 'badge' ? PSM.SINGLE_WORD : PSM.SINGLE_BLOCK, tessedit_char_whitelist: digitsOnly ? '0123456789' : '' })
+    const r = await worker.recognize(crop(box, scale, dropSides, mode === 'word' || mode === 'line', mode === 'badge'), {}, { blocks: true })
     const words = (r.data.blocks ?? []).flatMap(b => b.paragraphs.flatMap(pp => pp.lines.flatMap(l => l.words)))
     return words.map(w => ({ text: w.text, conf: w.confidence, x0: box.x + w.bbox.x0 / scale, y0: box.y + w.bbox.y0 / scale, x1: box.x + w.bbox.x1 / scale, y1: box.y + w.bbox.y1 / scale }))
   }

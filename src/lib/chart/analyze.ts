@@ -5,9 +5,11 @@
  */
 import { detect, normSignature, nccDist, type Pixels, type Box, type Detection, type SeqTile } from './detect'
 import type { HexaNodeType } from '../../types'
+import { prepareBadge } from './ocrprep'
+import { readBadgeDigits } from './badgeDigits'
 
 export interface OcrWord { text: string; x0: number; y0: number; x1: number; y1: number; conf: number }
-export type OcrFn = (box: Box, mode: 'line' | 'block' | 'word' | 'wordgray', digitsOnly: boolean, dropSideEdges?: boolean) => Promise<OcrWord[]>
+export type OcrFn = (box: Box, mode: 'line' | 'block' | 'word' | 'wordgray' | 'badge', digitsOnly: boolean, dropSideEdges?: boolean) => Promise<OcrWord[]>
 
 export interface ChartSkill {
   id: string                 // S0, S1 …
@@ -56,7 +58,26 @@ export async function analyzeChart(p: Pixels, ocr: OcrFn, progress?: (msg: strin
   const lowConf = new Set<number>()           // tiles whose two OCR passes disagreed
   const rowTops = d.rows.map(r => Math.min(...r.map(t => t.y)))
   const total = d.seq.length; let done = 0
-  for (let ri = 0; ri < d.rows.length; ri++) {
+  if (d.badges) {
+    // badge-style chart: each tile shows its level in a pill at the icon's bottom-right corner
+    for (const t of d.seq) {
+      done++
+      if (done % 8 === 0) progress?.(`Reading levels (${done}/${total})…`, 0.1 + 0.55 * done / total)
+      const box: Box = { x: t.x + t.w * 0.42, y: t.y + t.h * 0.55, w: t.w * 0.85, h: t.h * 0.62 }
+      const valid = (x: string) => /^\d{1,2}$/.test(x) && Number(x) >= 1 && Number(x) <= 30
+      // digit templates first (reliable for the game font); Tesseract only when they don't match
+      const tm = readBadgeDigits(prepareBadge(p, box, 6))
+      let txt = valid(tm.text) ? tm.text : ''
+      if (txt) { if (tm.conf < 0.35) lowConf.add(t.index) }
+      else {
+        const ws = await ocr(box, 'badge', true)
+        const o = ws.map(w => w.text).join('').replace(/\D/g, '')
+        if (valid(o)) { txt = o; lowConf.add(t.index) }
+      }
+      labels.set(t.index, txt)
+    }
+  }
+  for (let ri = 0; !d.badges && ri < d.rows.length; ri++) {
     const row = d.rows[ri]
     const bottom = Math.max(...row.map(t => t.y + t.h))
     const next = ri + 1 < d.rows.length ? rowTops[ri + 1] : p.height
