@@ -108,7 +108,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
       {phase === 'review' && canvas && (
         <div className="max-h-[78vh] space-y-4 overflow-y-auto pr-1">
           <div className="rounded-md border border-accent/40 bg-accent/5 p-2 text-xs">
-            <div>⚠ Levels are read by OCR and digits get confused (1↔4, 20↔2, 29↔23) — please skim all levels against the chart, not only the flagged ones.</div>
+            <div>⚠ Levels are read by OCR and digits get confused (1↔4, 20↔2, 29↔23) — please skim all levels against the chart, not only the flagged ones. Use ↑/↓ (or Enter) to jump between levels; a flagged level counts as checked once you've been in it and moved on.</div>
             {warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
           </div>
 
@@ -146,7 +146,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
                 {steps.some(s => s.level === null) && <button className="btn btn-sm" title="Remove every step that has no level" onClick={removeFlaggedRow}><Trash2 size={12} />Drop unreadable</button>}
               </div>
             </div>
-            <div className="max-h-72 overflow-y-auto rounded-md border border-line">
+            <div data-step-list className="max-h-72 overflow-y-auto rounded-md border border-line">
               {steps.map((s, pos) => ({ s, pos })).filter(({ s }) => !onlyFlagged || s.level === null || s.conf < 0.5).map(({ s, pos }) => {
                 const bad = s.level === null || s.conf < 0.5
                 const sk = liveSkills.find(x => x.id === resolve(s.skillId))
@@ -158,7 +158,18 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
                     <select value={resolve(s.skillId)} onChange={e => updStep(s.index, { skillId: e.target.value })} className="min-w-0 flex-1 py-0.5 text-xs">
                       {liveSkills.map(o => <option key={o.id} value={o.id}>{o.name || o.id}</option>)}
                     </select>
-                    <input type="number" min={1} max={max} value={s.level ?? ''} placeholder="?" onChange={e => updStep(s.index, { level: e.target.value === '' ? null : Math.max(1, Math.min(max, Number(e.target.value))) })} className={`w-14 py-0.5 text-center text-xs ${bad ? 'border-accent' : ''}`} />
+                    <input type="number" min={1} max={max} value={s.level ?? ''} placeholder="?" data-level-input
+                      onChange={e => updStep(s.index, { level: e.target.value === '' ? null : Math.max(1, Math.min(max, Number(e.target.value))) })}
+                      onFocus={e => e.currentTarget.select()}
+                      onBlur={() => { if (s.level !== null && s.conf < 0.5) updStep(s.index, {}) }}   // looked at it and left it → verified
+                      onKeyDown={e => {
+                        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== 'Enter') return
+                        e.preventDefault()   // arrows move between rows instead of changing the number
+                        const all = Array.from(e.currentTarget.closest('[data-step-list]')!.querySelectorAll<HTMLInputElement>('input[data-level-input]'))
+                        const i = all.indexOf(e.currentTarget)
+                        all[i + (e.key === 'ArrowUp' ? -1 : 1)]?.focus()
+                      }}
+                      className={`w-14 py-0.5 text-center text-xs ${bad ? 'border-accent' : ''}`} />
                     {bad ? <AlertTriangle size={12} className="text-accent" /> : <Check size={12} className="text-muted/40" />}
                     <button className="btn btn-ghost btn-sm" title="Move up" onClick={() => moveStep(s.index, -1)}><ArrowUp size={11} /></button>
                     <button className="btn btn-ghost btn-sm" title="Move down" onClick={() => moveStep(s.index, 1)}><ArrowDown size={11} /></button>
