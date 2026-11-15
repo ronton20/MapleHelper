@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Download, Lock, Pencil, RefreshCw, Save, Trash2, Upload, X } from 'lucide-react'
 import { listTemplates, fetchTemplate, adminSave, adminDelete, getAdminKey, clearAdminKey, type LibraryEntry } from '../api/library'
-import { GMS_CLASSES, CLASS_GROUPS, CLASS_BY_KEY } from '../data/gmsClasses'
+import { CLASS_BY_KEY } from '../data/gmsClasses'
+import { ClassOptions } from './ClassOptions'
 import { GROUPS, GROUP_LABEL, GROUP_TYPES, NODE_TYPE_LABEL, maxLevel } from '../data/hexaCosts'
 import { useUI } from '../store'
 import { Modal } from './Sidebar'
@@ -60,7 +61,7 @@ export function AdminView() {
         <div className="flex flex-wrap gap-2">
           <select value={filter} onChange={e => setFilter(e.target.value)} className="w-auto min-w-[12rem]">
             <option value="">All classes ({entries.length})</option>
-            {CLASS_GROUPS.map(g => <optgroup key={g} label={g}>{GMS_CLASSES.filter(c => c.group === g).map(c => { const n = entries.filter(e => e.classKey === c.key).length; return <option key={c.key} value={c.key}>{c.name}{n ? ` (${n})` : ''}</option> })}</optgroup>)}
+            <ClassOptions suffix={c => { const n = entries.filter(e => e.classKey === c.key).length; return n ? ` (${n})` : '' }} />
           </select>
           <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search by name…" className="w-auto min-w-[12rem] flex-1" />
         </div>
@@ -135,7 +136,7 @@ function TemplateEditor({ tpl, onClose, onSaved }: { tpl: ClassTemplate; onClose
           <label className="text-xs"><span className="label mb-1 block">Class</span>
             <select value={classKey} onChange={e => setClassKey(e.target.value)}>
               <option value="">Select a class…</option>
-              {CLASS_GROUPS.map(g => <optgroup key={g} label={g}>{GMS_CLASSES.filter(c => c.group === g).map(c => <option key={c.key} value={c.key}>{c.name}</option>)}</optgroup>)}
+              <ClassOptions />
             </select>
           </label>
         </div>

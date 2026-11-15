@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Plus, Settings, Swords, Hexagon, Trash2, RefreshCw } from 'lucide-react'
 import { listTemplates, fetchTemplate, type LibraryEntry } from '../api/library'
-import { GMS_CLASSES, CLASS_GROUPS, CLASS_BY_KEY, classKeyForJob, BUILTIN_TO_KEY } from '../data/gmsClasses'
+import { CLASS_BY_KEY, classKeyForJob, BUILTIN_TO_KEY } from '../data/gmsClasses'
+import { ClassOptions } from './ClassOptions'
 import { db, createCharacter, deleteCharacter, updateCharacter, getSettings } from '../db'
 import { useUI } from '../store'
 import { lookupCharacter } from '../api/nexon'
@@ -63,7 +64,7 @@ function CharRow({ c, active, onClick }: { c: Character; active: boolean; onClic
       </div>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">{c.name}</div>
-        <div className="truncate text-[11px] text-muted">{c.job || 'Unknown job'}{c.level ? ` · Lv. ${c.level}` : ''}</div>
+        <div className="truncate text-[11px] text-muted">{c.job || 'No class set'}{c.level ? ` · Lv. ${c.level}` : ''}</div>
       </div>
       <button className="btn btn-ghost btn-sm opacity-0 group-hover:opacity-100" title="Delete character"
         onClick={(e) => { e.stopPropagation(); if (confirm(`Delete ${c.name} and all its gear/HEXA data?`)) deleteCharacter(c.id) }}>
@@ -75,7 +76,6 @@ function CharRow({ c, active, onClick }: { c: Character; active: boolean; onClic
 
 export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: () => void; onCreated: (id: string) => void; existing?: Character }) {
   const [name, setName] = useState(existing?.name ?? '')
-  const [job, setJob] = useState(existing?.job ?? '')
   const [level, setLevel] = useState(existing?.level ?? 0)
   const [world, setWorld] = useState(existing?.world ?? '')
   const [imageUrl, setImageUrl] = useState(existing?.imageUrl ?? '')
@@ -84,6 +84,7 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   const [heroic, setHeroic] = useState<boolean>(existing?.heroic ?? (localStorage.getItem('maple-helper.lastHeroic') ?? '1') === '1')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [note, setNote] = useState('')
   const [classKey, setClassKey] = useState<string>(existing?.classKey || classKeyForJob(existing?.job) || '')
   const allTemplates = useLiveQuery(() => db.templates.orderBy('name').toArray(), []) ?? []
   // only data for the chosen class: built-in seed, local templates of that class, shared templates of that class
@@ -102,7 +103,8 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   }, [classKey])
   // when the class changes, drop a data choice that belongs to another class
   useEffect(() => {
-    if (!classId || classId.startsWith('lib:')) return
+    if (!classId) { if (builtins[0]) setClassId(builtins[0].id); return }   // preselect built-in data for the class
+    if (classId.startsWith('lib:')) return
     const ok = builtins.some(b => b.id === classId) || localTemplates.some(t => `tpl:${t.id}` === classId)
     if (!ok && (existing?.classId !== classId)) setClassId(builtins[0]?.id ?? '')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,14 +115,16 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
     try {
       const s = await getSettings()
       const r = await lookupCharacter(name, s.proxyUrl, heroic, region)
-      setJob(r.job); setLevel(r.level); setWorld(r.world); setImageUrl(r.imageUrl); setName(r.name)
-      const key = classKeyForJob(r.job); if (key) setClassKey(key)
+      setLevel(r.level); setWorld(r.world); setImageUrl(r.imageUrl); setName(r.name)
+      const key = classKeyForJob(r.job)
+      if (key) { setClassKey(key); setNote('') } else setNote(r.job ? `Rankings say "${r.job}" — pick the matching class.` : 'Pick the class.')
       const cls = classForJob(r.job); if (cls) setClassId(cls.id)
     } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
   }
 
   async function save() {
     if (!name.trim()) return
+    const job = CLASS_BY_KEY[classKey]?.name ?? existing?.job ?? ''
     let dataId = classId
     if (dataId.startsWith('lib:')) {
       try {
@@ -164,36 +168,30 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
             <input value={name} onChange={e => setName(e.target.value)} placeholder="IGN" autoFocus onKeyDown={e => e.key === 'Enter' && fetchFromNexon()} />
             <button className="btn whitespace-nowrap" onClick={fetchFromNexon} disabled={busy || !name.trim()}><RefreshCw size={14} className={busy ? 'animate-spin' : ''} />Fetch</button>
           </div>
-          <div className="mt-1 text-[11px] text-muted">Pulls job, level, world and image from the GMS rankings for the region / world type above. Or fill in manually.</div>
+          <div className="mt-1 text-[11px] text-muted">Pulls class, level, world and image from the GMS rankings for the region / world type above. Or fill in manually.</div>
           {err && <div className="mt-1 text-xs text-red-400">{err}</div>}
         </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div><div className="label mb-1">Job</div><input value={job} onChange={e => setJob(e.target.value)} /></div>
+        <div className="grid grid-cols-[2fr_1fr_1fr] gap-2">
+          <div>
+            <div className="label mb-1">Class</div>
+            <select value={classKey} onChange={e => { setClassKey(e.target.value); setNote('') }} className={classKey ? '' : 'text-muted'}>
+              <option value="">Select a class…</option>
+              <ClassOptions />
+            </select>
+          </div>
           <div><div className="label mb-1">Level</div><input type="number" value={level || ''} onChange={e => setLevel(Number(e.target.value))} /></div>
           <div><div className="label mb-1">World</div><input value={world} onChange={e => setWorld(e.target.value)} placeholder="Kronos" /></div>
         </div>
+        {note && <div className="-mt-1 text-[11px] text-accent">{note}</div>}
         <div><div className="label mb-1">Image URL</div><input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://msavatar1.nexon.net/Character/....png" /></div>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <div>
-            <div className="label mb-1">Class</div>
-            <select value={classKey} onChange={e => setClassKey(e.target.value)}>
-              <option value="">Select a class…</option>
-              {CLASS_GROUPS.map(g => (
-                <optgroup key={g} label={g}>
-                  {GMS_CLASSES.filter(c => c.group === g).map(c => <option key={c.key} value={c.key}>{c.name}</option>)}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-          <div>
-            <div className="label mb-1">HEXA data</div>
-            <select value={classId} onChange={e => setClassId(e.target.value)} disabled={!classKey}>
-              <option value="">Generic (rename nodes yourself)</option>
-              {builtins.length > 0 && <optgroup label="Built-in">{builtins.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
-              {localTemplates.length > 0 && <optgroup label="Saved on this device">{localTemplates.map(t => <option key={t.id} value={`tpl:${t.id}`}>{t.name}</option>)}</optgroup>}
-              {lib.length > 0 && <optgroup label="Shared library">{lib.map(e => <option key={e.id} value={`lib:${e.id}`}>{e.name} · {e.steps} steps</option>)}</optgroup>}
-            </select>
-          </div>
+        <div>
+          <div className="label mb-1">HEXA data</div>
+          <select value={classId} onChange={e => setClassId(e.target.value)} disabled={!classKey}>
+            <option value="">Generic (rename nodes yourself)</option>
+            {builtins.length > 0 && <optgroup label="Built-in">{builtins.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+            {localTemplates.length > 0 && <optgroup label="Saved on this device">{localTemplates.map(t => <option key={t.id} value={`tpl:${t.id}`}>{t.name}</option>)}</optgroup>}
+            {lib.length > 0 && <optgroup label="Shared library">{lib.map(e => <option key={e.id} value={`lib:${e.id}`}>{e.name} · {e.steps} steps</option>)}</optgroup>}
+          </select>
         </div>
         <div className="text-[11px] text-muted">
           {!classKey ? 'Pick the class (Fetch fills it in) to see HEXA data made for it.'

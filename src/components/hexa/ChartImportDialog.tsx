@@ -7,7 +7,8 @@ import { GROUPS, GROUP_LABEL, GROUP_TYPES, NODE_TYPE_LABEL, maxLevel, STAT_MAX_L
 import type { HexaNodeDef, HexaNodeType, HexaOrderStep } from '../../types'
 import { db, getSettings } from '../../db'
 import { publishTemplate } from '../../api/library'
-import { GMS_CLASSES, CLASS_GROUPS, CLASS_BY_KEY } from '../../data/gmsClasses'
+import { CLASS_BY_KEY } from '../../data/gmsClasses'
+import { ClassOptions } from '../ClassOptions'
 
 export interface ImportOutcome { nodes: HexaNodeDef[]; order: HexaOrderStep[]; imageDataUrl: string; templateId?: string; classKey?: string }
 
@@ -174,7 +175,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
               <label className="text-xs"><span className="label mb-1 block">Class</span>
                 <select value={classKey} onChange={e => setClassKey(e.target.value)} className="text-xs">
                   <option value="">Select a class…</option>
-                  {CLASS_GROUPS.map(g => <optgroup key={g} label={g}>{GMS_CLASSES.filter(c => c.group === g).map(c => <option key={c.key} value={c.key}>{c.name}</option>)}</optgroup>)}
+                  <ClassOptions />
                 </select>
               </label>
               <label className="text-xs"><span className="label mb-1 block">Save name</span>

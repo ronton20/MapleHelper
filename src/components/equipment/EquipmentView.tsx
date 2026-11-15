@@ -8,6 +8,7 @@ import type { Character, ItemInstance, Preset, SlotKey } from '../../types'
 import { RANK_COLOR } from '../../lib/flame'
 import { potentialSummary } from '../../data/potentials'
 import { Inspector } from './Inspector'
+import { classKeyForJob, CLASS_BY_KEY } from '../../data/gmsClasses'
 import { PresetBar } from './PresetBar'
 import { AddCharacterDialog } from '../Sidebar'
 import { lookupCharacter } from '../../api/nexon'
@@ -26,7 +27,8 @@ export function EquipmentView({ character }: { character: Character }) {
     try {
       const s = await getSettings()
       const r = await lookupCharacter(character.name, s.proxyUrl, character.heroic ?? true, character.region ?? 'eu')
-      await updateCharacter(character.id, { job: r.job, level: r.level, world: r.world, imageUrl: r.imageUrl, classId: character.classId ?? classForJob(r.job)?.id ?? null })
+      const key = character.classKey || classKeyForJob(r.job)
+      await updateCharacter(character.id, { job: CLASS_BY_KEY[key]?.name ?? r.job, level: r.level, world: r.world, imageUrl: r.imageUrl, classId: character.classId ?? classForJob(r.job)?.id ?? null, classKey: key || undefined })
     } catch (e) { alert((e as Error).message) } finally { setSyncing(false) }
   }
 
