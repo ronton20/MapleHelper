@@ -35,7 +35,7 @@ export function Sidebar() {
         <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)} title="Add character"><Plus size={14} /></button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2">
+      <div className="flex-1 overflow-y-auto px-2 pt-1.5 pb-1">
         {characters.length === 0 && (
           <div className="px-2 py-6 text-center text-xs text-muted">No characters yet.<br />Click + to add one.</div>
         )}
