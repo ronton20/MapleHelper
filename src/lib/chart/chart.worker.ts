@@ -37,7 +37,7 @@ self.onmessage = async (ev: MessageEvent<AnalyzeMsg>) => {
     }
     const a = await analyzeChart(p, ocr, (msg, frac) => postMessage({ type: 'progress', msg, frac }), refs)
     // strip heavy/unserialisable bits before posting
-    const detection = { tileSize: a.detection.tileSize, rows: a.detection.rows.map(r => r.map(t => ({ x: t.x, y: t.y, w: t.w, h: t.h, index: t.index, row: t.row, col: t.col, cluster: t.cluster }))) }
+    const detection = { tileSize: a.detection.tileSize, badges: !!a.detection.badges, rows: a.detection.rows.map(r => r.map(t => ({ x: t.x, y: t.y, w: t.w, h: t.h, index: t.index, row: t.row, col: t.col, cluster: t.cluster }))) }
     postMessage({ type: 'result', analysis: { tileSize: a.tileSize, skills: a.skills, steps: a.steps, warnings: a.warnings, headers: a.headers, detection } })
   } catch (e) {
     postMessage({ type: 'error', message: (e as Error).message })

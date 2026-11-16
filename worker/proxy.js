@@ -7,6 +7,10 @@
  *   PUT  /templates/:id                 admin: replace a template          (ADMIN_KEY secret → x-admin-key header)
  *   DELETE /templates/:id               admin: delete a template
  *   GET  /admin/check                   admin: verify the key
+ *   GET  /bank                         skill bank: list classes (classKey, count, updatedAt)
+ *   GET  /bank/:classKey               one class's skill bank ('common' = Sol Janus / Hecate / HEXA Stat icons)
+ *   PUT  /bank/:classKey               admin: replace a class's skill bank
+ *   DELETE /bank/:classKey             admin: delete it
  *   GET  /sync/:key                     fetch a user's data snapshot (key = long random string from the app)   (KV "TEMPLATES")
  *   PUT  /sync/:key                     store a snapshot (≤ 4 MB)
  *
@@ -29,6 +33,45 @@ export default {
     if (u.pathname === '/admin/check') {
       if (!env.ADMIN_KEY) return json({ error: 'ADMIN_KEY is not set on this worker' }, 501)
       return isAdmin ? json({ ok: true }) : json({ error: 'bad admin key' }, 403)
+    }
+
+    // ---- skill bank (same KV namespace, "bank:" prefix) -----------------------------------------
+    if (u.pathname === '/bank' || u.pathname.startsWith('/bank/')) {
+      if (!env.TEMPLATES) return json({ error: 'KV namespace TEMPLATES is not bound on this worker' }, 501)
+      const key = decodeURIComponent(u.pathname.split('/')[2] ?? '')
+      if (key && !/^[a-z0-9-]{2,40}$/.test(key)) return json({ error: 'bad class key' }, 400)
+      if (request.method === 'GET' && !key) {
+        const out = []
+        let cursor
+        do {
+          const list = await env.TEMPLATES.list({ prefix: 'bank:', cursor })
+          for (const k of list.keys) if (k.metadata) out.push(k.metadata)
+          cursor = list.list_complete ? undefined : list.cursor
+        } while (cursor)
+        return json({ banks: out }, 200)
+      }
+      if (request.method === 'GET') {
+        const v = await env.TEMPLATES.get(`bank:${key}`)
+        return v ? new Response(v, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS } }) : json({ error: 'not found' }, 404)
+      }
+      if (!isAdmin) return json({ error: 'admin only' }, 403)
+      if (request.method === 'PUT' && key) {
+        let bank
+        try { bank = await request.json() } catch { return json({ error: 'bad json' }, 400) }
+        if (bank?.classKey !== key || !Array.isArray(bank.entries)) return json({ error: 'missing fields or class mismatch' }, 400)
+        const entries = bank.entries.filter(e => e && typeof e.slot === 'string' && typeof e.name === 'string' && typeof e.icon === 'string' && e.icon.startsWith('data:image/'))
+          .map(e => ({ slot: e.slot.slice(0, 12), name: e.name.slice(0, 120), primary: !!e.primary, icon: e.icon }))
+        const out = { classKey: key, entries, updatedAt: Date.now() }
+        const body = JSON.stringify(out)
+        if (body.length > 5_000_000) return json({ error: 'bank too large' }, 413)
+        await env.TEMPLATES.put(`bank:${key}`, body, { metadata: { classKey: key, count: entries.length, slots: new Set(entries.map(e => e.slot)).size, updatedAt: out.updatedAt } })
+        return json({ ok: true, count: entries.length, updatedAt: out.updatedAt })
+      }
+      if (request.method === 'DELETE' && key) {
+        await env.TEMPLATES.delete(`bank:${key}`)
+        return json({ ok: true })
+      }
+      return json({ error: 'method not allowed' }, 405)
     }
 
     // ---- shared template library ------------------------------------------------------------

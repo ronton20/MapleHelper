@@ -6,6 +6,8 @@ import { ClassOptions } from '../ClassOptions'
 import { CLASS_BY_KEY, classKeyForJob } from '../../data/gmsClasses'
 import { db, getSettings, updateCharacter, BUILD_PROXY_URL } from '../../db'
 import { publishTemplate } from '../../api/library'
+import { loadBanks } from '../../api/bank'
+import { coreEntry } from '../../data/skillBank'
 import type { Character, ClassTemplate, HexaNodeDef, HexaProfile } from '../../types'
 
 /** shrink an uploaded (data-URL) icon to ≤64px so shared saves stay small; URLs are kept as they are */
@@ -28,12 +30,17 @@ export function ShareTemplateDialog({ character, profile, onClose }: { character
   const [name, setName] = useState(`${CLASS_BY_KEY[classKey]?.name ?? 'HEXA'} – ${month}`)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const icons = profile.nodes.filter(n => n.icon).length
+  const linked = profile.nodes.filter(n => n.slot).length
 
   async function share() {
     setBusy(true); setMsg(null)
     try {
-      const nodes: HexaNodeDef[] = await Promise.all(profile.nodes.map(async n => ({ ...n, icon: await shrinkIcon(n.icon) })))
+      // nodes on a skill-bank core don't carry icons – everyone gets them from the bank
+      const banks = await loadBanks(classKey)
+      const nodes: HexaNodeDef[] = await Promise.all(profile.nodes.map(async n => {
+        const { icon, ...rest } = n
+        return n.slot && coreEntry(n.slot, banks.cls, banks.common) ? rest : { ...rest, icon: await shrinkIcon(icon) }
+      }))
       const tpl: ClassTemplate = { id: nanoid(8), name: name.trim(), classKey, nodes, order: profile.order, source: 'shared from a character', createdAt: Date.now() }
       await db.templates.put(tpl)
       await publishTemplate(tpl, (await getSettings()).publishKey)
@@ -47,9 +54,9 @@ export function ShareTemplateDialog({ character, profile, onClose }: { character
   return (
     <Modal title="Share HEXA setup" onClose={onClose}>
       <div className="space-y-3 text-sm">
-        <p className="text-xs text-muted">Uploads this character's node names, types, icons and leveling order to the shared library. Your levels and progress are not shared.</p>
+        <p className="text-xs text-muted">Uploads this character's HEXA nodes (names and skill-bank cores) and leveling order to the shared library. Your levels and progress are not shared.</p>
         <div className="rounded-md border border-line bg-panel-2 px-3 py-2 text-xs text-muted">
-          {profile.nodes.length} nodes · {icons} icon{icons === 1 ? '' : 's'} · {profile.order.length} leveling-order steps
+          {profile.nodes.length} nodes ({linked} linked to the skill bank) · {profile.order.length} leveling-order steps
         </div>
         {profile.order.length === 0 && <div className="text-xs text-accent">There's no leveling order yet. Add one with "Order" first so others get the upgrade path.</div>}
         <label className="block"><div className="label mb-1">Class</div>

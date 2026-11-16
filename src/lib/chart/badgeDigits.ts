@@ -28,8 +28,9 @@ export function segmentGlyphs(b: Bitmap): Bitmap[] {
     comps.push({ px, x0, x1, y0, y1 })
   }
   // bits touching the pill's edge are icon / frame remnants, never digits
+  // (left/right only: in tight light-theme pills real digits touch the top and bottom)
   const pad = b.pad ?? -10, edge = Math.max(2, Math.round((b.pad ?? 0) / 4 * 1.5))   // 1.5 source px (pad = 4 px × scale)
-  const inner = comps.filter(c => !(c.x0 <= pad + edge || c.x1 >= W - pad - 1 - edge || c.y0 <= pad + edge || c.y1 >= H - pad - 1 - edge))
+  const inner = comps.filter(c => !(c.x0 <= pad + edge || c.x1 >= W - pad - 1 - edge))
   const pool = b.pad !== undefined ? inner : comps
   if (!pool.length) return []
   // digits are the tall components; keep those at least 60% as tall as the tallest

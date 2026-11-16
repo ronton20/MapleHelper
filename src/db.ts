@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { nanoid } from 'nanoid'
+import type { SkillBank } from './data/skillBank'
 import type { Character, HexaProfile, Settings, Preset, ItemInstance, Flame, FlameWeights, HexaNodeDef, HexaOrderStep, ClassTemplate, Region } from './types'
 import { GENERIC_NODES, weightsForClass } from './data/classes'
 
@@ -8,6 +9,8 @@ export const db = new Dexie('maple-helper') as Dexie & {
   hexa: EntityTable<HexaProfile, 'characterId'>
   settings: EntityTable<Settings, 'id'>
   templates: EntityTable<ClassTemplate, 'id'>
+  /** local cache of the shared skill bank (one row per class + 'common') */
+  banks: EntityTable<SkillBank, 'classKey'>
 }
 
 db.version(1).stores({
@@ -41,6 +44,14 @@ db.version(3).stores({
     await tx.table('templates').put({ id: tplId, name: `${b.name} (former built-in)`, classKey: b.classKey, nodes: prof?.nodes ?? GENERIC_NODES, order: prof?.order ?? [], source: 'former built-in data', createdAt: Date.now() } satisfies ClassTemplate)
     await tx.table('characters').update(c.id, { classId: `tpl:${tplId}`, classKey: c.classKey || b.classKey })
   }
+})
+// v5: local cache of the shared skill bank
+db.version(5).stores({
+  characters: 'id, name, updatedAt',
+  hexa: 'characterId',
+  settings: 'id',
+  templates: 'id, name',
+  banks: 'classKey',
 })
 
 /** built-in class or stored template, by id ('tpl:<id>' for templates) */

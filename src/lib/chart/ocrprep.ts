@@ -94,37 +94,38 @@ export function prepareBadge(p: Pixels, b: Box, scale: number): Bitmap {
   const lum = (c: readonly number[]) => (c[0] * 299 + c[1] * 587 + c[2] * 114) / 1000
   const isDark = (c: readonly number[]) => lum(c) < 70 && Math.max(...c) - Math.min(...c) < 40
   const isGold = (c: readonly number[]) => c[0] > 170 && c[1] > 120 && c[2] < 120 && c[0] - c[2] > 80
-  let nd = 0, ng = 0
-  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) { const c = px(xx, yy); if (isDark(c)) nd++; else if (isGold(c)) ng++ }
-  const gold = ng > nd
+  // dark or gold pill? compare the largest single flat colour of each kind (icons are textured, pills flat)
+  const flat = (f: (c: readonly number[]) => boolean) => {
+    const m = new Map<number, number>()
+    for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) { const c = px(xx, yy); if (f(c)) { const k = (c[0] << 16) | (c[1] << 8) | c[2]; m.set(k, (m.get(k) ?? 0) + 1) } }
+    return Math.max(0, ...m.values())
+  }
+  const gold = flat(isGold) > flat(isDark)
   const isPill = gold ? isGold : isDark
   // pill extent: flood-fill pill-coloured pixels from the one nearest the box centre (the coloured frame
   // separates the pill from a dark page background); digits are holes inside it, so take the bounding box
-  let seed = -1, sd = Infinity
-  const solid = (xx: number, yy: number) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const ax = xx + dx, ay = yy + dy; if (ax < 0 || ay < 0 || ax >= w || ay >= h || !isPill(px(ax, ay))) return false } return true }
-  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) if (solid(xx, yy)) { const dd = (xx - w / 2) ** 2 + (yy - h / 2) ** 2; if (dd < sd) { sd = dd; seed = yy * w + xx } }
-  let c0 = 0, c1 = w - 1, r0 = 0, r1 = h - 1
-  if (seed >= 0) {
-    const seen = new Uint8Array(w * h); const st = [seed]; seen[seed] = 1
-    const sc = px(seed % w, (seed / w) | 0)
-    c0 = w; c1 = -1; r0 = h; r1 = -1
-    while (st.length) {
-      const i = st.pop()!, xx = i % w, yy = (i / w) | 0
-      if (xx < c0) c0 = xx; if (xx > c1) c1 = xx; if (yy < r0) r0 = yy; if (yy > r1) r1 = yy
-      for (const [nx, ny] of [[xx + 1, yy], [xx - 1, yy], [xx, yy + 1], [xx, yy - 1]]) {
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
-        const j = ny * w + nx; if (seen[j]) continue; seen[j] = 1
-        const c = px(nx, ny)
-        if (isPill(c) && Math.abs(c[0] - sc[0]) + Math.abs(c[1] - sc[1]) + Math.abs(c[2] - sc[2]) < 70) st.push(j)
-      }
+  // pills are one flat colour: the most common pill-ish colour in the box is the pill (icons are textured)
+  const modeCount = new Map<number, number>()
+  for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) { const c = px(xx, yy); if (isPill(c)) { const k = (c[0] << 16) | (c[1] << 8) | c[2]; modeCount.set(k, (modeCount.get(k) ?? 0) + 1) } }
+  const mk = [...modeCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+  const pillC = mk === undefined ? null : [(mk >> 16) & 255, (mk >> 8) & 255, mk & 255]
+  const nearPill = (c: readonly number[]) => !pillC || Math.abs(c[0] - pillC[0]) + Math.abs(c[1] - pillC[1]) + Math.abs(c[2] - pillC[2]) < 40
+  // pill extent from its exact flat colour: rows/columns that contain it (digits only leave thin pill
+  // margins, so allow small gaps), taking the longest run so stray icon pixels don't stretch the box
+  const run = (n: number, f: (i: number) => boolean, gap: number) => {
+    let bs = 0, be = -1, s0 = -1, last = -1
+    for (let i = 0; i <= n; i++) {
+      const on = i < n && f(i)
+      if (on) { if (s0 < 0) s0 = i; last = i }
+      else if (s0 >= 0 && (i === n || i - last > gap)) { if (last - s0 > be - bs) { bs = s0; be = last } s0 = -1 }
     }
-    // the fill can leak into the icon's dark outline above the pill: keep the longest band of rows
-    // where the pill colour covers a good part of the bbox width
-    const rowFrac = (yy: number) => { let n = 0; for (let xx = c0; xx <= c1; xx++) if (isPill(px(xx, yy))) n++; return n / Math.max(1, c1 - c0 + 1) }
-    let bs = r0, be = r0 - 1, st0 = -1
-    for (let yy = r0; yy <= r1 + 1; yy++) { const on = yy <= r1 && rowFrac(yy) >= 0.3; if (on && st0 < 0) st0 = yy; if (!on && st0 >= 0) { if (yy - 1 - st0 > be - bs) { bs = st0; be = yy - 1 } st0 = -1 } }
-    if (be >= bs) { r0 = bs; r1 = be }
+    return [bs, be] as const
   }
+  const cnt = (x0: number, x1: number, y0: number, y1: number) => { let n = 0; for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) if (isPill(px(xx, yy)) && nearPill(px(xx, yy))) n++; return n }
+  let [r0, r1] = run(h, yy => cnt(0, w - 1, yy, yy) >= 3, 1)
+  let [c0, c1] = run(w, xx => cnt(xx, xx, r0, r1) >= 1, 2)
+  ;[r0, r1] = run(h, yy => yy >= r0 && yy <= r1 && cnt(c0, c1, yy, yy) >= 2, 1)
+  if (c1 < c0 || r1 < r0) { c0 = 0; c1 = w - 1; r0 = 0; r1 = h - 1 }
   const bw = Math.max(1, c1 - c0 + 1), bh = Math.max(1, r1 - r0 + 1)
   // digit strength 0..1 (light digits on dark pill / dark digits on gold pill)
   const ink = (c: readonly number[]) => { const l = lum(c); return gold ? Math.min(1, Math.max(0, (150 - l) / 80)) : Math.min(1, Math.max(0, (l - 90) / 90)) }

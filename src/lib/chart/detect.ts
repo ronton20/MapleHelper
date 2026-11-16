@@ -195,19 +195,26 @@ function regularizeRows(p: Pixels, g: Grad, rows: Tile[][], size: number): Tile[
     const ph = (Math.atan2(sy, sx) / (2 * Math.PI)) * P0
     for (const t of r) { if (Math.abs(wrapP(t.cx - ph, P0)) > P0 * 0.12) off++; n++ }
   }
-  if (off / n < 0.15) return null
   // grouped layouts (wider gaps at arrows / section breaks) are off a single pitch too, but their rows
-  // are detected consistently: only snap when full rows disagree on their tile count (misdetection)
+  // are detected consistently. Snap only on clear misdetection: tiles of one row at clearly different
+  // heights (hits jumping between frame and icon), or full rows disagreeing on their tile count (misses).
+  // The fitted grid is only kept if it still covers nearly all of the original hits (checked below).
   const counts = rows.slice(0, -1).map(r => r.length)
-  if (counts.length < 2 || Math.max(...counts) - Math.min(...counts) < 2) return null
+  const uneven = counts.length >= 2 && Math.max(...counts) - Math.min(...counts) >= 2
+  const yJitter = median(rows.map(r => Math.max(...r.map(t => t.cy)) - Math.min(...r.map(t => t.cy))))
+  if (!(yJitter >= size * 0.15 || uneven)) return null
 
   // rows: vertical pitch from row centres, then every row position across the image
   const cys = rows.map(r => median(r.map(t => t.cy)))
   const rg = cys.slice(1).map((c, i) => c - cys[i])
   const rm0 = median(rg)
   const PY = median(rg.map(gp => gp / Math.max(1, Math.round(gp / rm0))).filter(e => e > rm0 * 0.75 && e < rm0 * 1.25)) || P0
+  // anchor the rows on the phase shared by most rows (a header / legend row above the chart is off-phase)
+  let vx = 0, vy = 0
+  for (const r of rows) { const c = median(r.map(t => t.cy)); const a = (c / PY) * 2 * Math.PI; vx += Math.cos(a) * r.length; vy += Math.sin(a) * r.length }
+  const phaseY = (((Math.atan2(vy, vx) / (2 * Math.PI)) * PY) % PY + PY) % PY
   const rowYs: number[] = []
-  for (let y = cys[0] - Math.floor(cys[0] / PY) * PY; y < p.height; y += PY) rowYs.push(y)
+  for (let y = phaseY; y < p.height; y += PY) rowYs.push(y)
 
   const fitRow = (cy0: number, P: number, S: number) => {
     let best = { score: -1, shift: 0, dy: 0, cells: [] as { cx: number; cy: number; sc: number }[] }
@@ -233,7 +240,28 @@ function regularizeRows(p: Pixels, g: Grad, rows: Tile[][], size: number): Tile[
   const allSc = bestAll.rows.flatMap(f => f.cells.map(c => c.sc)).sort((a, b) => b - a)
   const ref = allSc[Math.floor(allSc.length * 0.1)] || 1
   const S = bestAll.S
-  const kept = bestAll.rows.map(f => f.cells.filter(c => c.sc > ref * 0.35))
+  // background = most common colour at the gap corners between grid cells (pure background: connector
+  // bars run through the middle of a row, not between rows) – the chart panel can differ from the page edge
+  const bgCount = new Map<number, number>()
+  for (const f of bestAll.rows) for (const c of f.cells) for (const [dx, dy] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) {
+    const x = Math.round(c.cx + dx * bestAll.P), y = Math.round(c.cy + dy * PY)
+    if (x < 0 || y < 0 || x >= p.width || y >= p.height) continue
+    const i = (y * p.width + x) * 4; const k = ((p.data[i] >> 4) << 8) | ((p.data[i + 1] >> 4) << 4) | (p.data[i + 2] >> 4)
+    bgCount.set(k, (bgCount.get(k) ?? 0) + 1)
+  }
+  const bk = [...bgCount.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? 0
+  const bg = [((bk >> 8) & 15) * 16 + 8, ((bk >> 4) & 15) * 16 + 8, (bk & 15) * 16 + 8]
+  /** share of the cell (inset) that isn't page background – real tiles are mostly filled */
+  const filled = (cx: number, cy: number, S: number) => {
+    let n = 0, f = 0; const i0 = Math.round(S * 0.15)
+    for (let y = Math.round(cy - S / 2) + i0; y < Math.round(cy + S / 2) - i0; y++) for (let x = Math.round(cx - S / 2) + i0; x < Math.round(cx + S / 2) - i0; x++) {
+      if (x < 0 || y < 0 || x >= p.width || y >= p.height) continue
+      const i = (y * p.width + x) * 4; n++
+      if (Math.abs(p.data[i] - bg[0]) + Math.abs(p.data[i + 1] - bg[1]) + Math.abs(p.data[i + 2] - bg[2]) > 60) f++
+    }
+    return n ? f / n : 0
+  }
+  const kept = bestAll.rows.map(f => f.cells.filter(c => c.sc > ref * 0.35 || filled(c.cx, c.cy, bestAll!.S) > 0.6))
   // framed tiles: find the icon square inside the frame (same inset for every tile → median over all)
   let inS = S, inDx = 0, inDy = 0
   if (S > size * 1.3) {
@@ -253,7 +281,12 @@ function regularizeRows(p: Pixels, g: Grad, rows: Tile[][], size: number): Tile[
     const x = Math.round(c.cx - inS / 2 + inDx), y = Math.round(c.cy - inS / 2 + inDy)
     return { x, y, w: inS, h: inS, cx: x + inS / 2, cy: y + inS / 2, score: c.sc }
   })).filter(r => r.length)
-  return out.length ? out : null
+  if (!out.length) return null
+  // sanity: the grid must account for (almost) every original hit, else keep the original detection
+  const snapped = out.flat()
+  const raw = rows.flat()
+  const covered = raw.filter(t => snapped.some(u => Math.abs(u.cx - t.cx) < bestAll.P * 0.45 && Math.abs(u.cy - t.cy) < PY * 0.45)).length
+  return covered >= raw.length * 0.9 ? out : null
 }
 
 /** level badge in the icon's bottom-right corner? (dark pill over the icon; gold for max level) */
@@ -262,7 +295,7 @@ function hasLevelBadges(p: Pixels, tiles: Box[]): boolean {
     let dk = 0, n = 0
     for (let y = Math.round(y0); y < Math.round(y1); y++) for (let x = Math.round(x0); x < Math.round(x1); x++) {
       if (x < 0 || y < 0 || x >= p.width || y >= p.height) continue
-      const i = (y * p.width + x) * 4; if (luma(p.data, i) < 60) dk++; n++
+      const i = (y * p.width + x) * 4; if (luma(p.data, i) < 85) dk++; n++   // dark (~26-40) or light-theme grey (~64) pill
     }
     return n ? dk / n : 0
   }
@@ -278,6 +311,18 @@ function hasLevelBadges(p: Pixels, tiles: Box[]): boolean {
 export function matchBox(t: Box, badges: boolean): Box {
   return badges ? { x: t.x + Math.round(t.w * 0.08), y: t.y + Math.round(t.h * 0.04), w: Math.round(t.w * 0.84), h: Math.round(t.h * 0.62) } : t
 }
+
+
+/** mean RGB of a box (inset 15%) */
+function meanColor(p: Pixels, b: Box): number[] {
+  const m = [0, 0, 0]; let n = 0; const ix = Math.round(b.w * 0.15), iy = Math.round(b.h * 0.15)
+  for (let y = b.y + iy; y < b.y + b.h - iy; y++) for (let x = b.x + ix; x < b.x + b.w - ix; x++) {
+    if (x < 0 || y < 0 || x >= p.width || y >= p.height) continue
+    const i = (y * p.width + x) * 4; m[0] += p.data[i]; m[1] += p.data[i + 1]; m[2] += p.data[i + 2]; n++
+  }
+  return n ? m.map(v => v / n) : m
+}
+const colorDist = (a: number[], b: number[]) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])
 
 export function detect(p: Pixels): Detection {
   const { main, size, all, g } = findSquares(p)
@@ -318,10 +363,16 @@ export function detect(p: Pixels): Detection {
 
   // clustering by signature (identical icons are ~0 apart, different icons > 25)
   const thr = 0.3
+  const avgCol = new Map<number, number[]>()
+  if (badges) for (const t of seq) avgCol.set(t.index, meanColor(p, matchBox(t, true)))
   const clusters: { rep: SeqTile; members: SeqTile[]; legendIdx: number }[] = []
   for (const s of seq) {
     let best = -1, bd = Infinity
-    clusters.forEach((c, ci) => { const d = nccDistMulti(s.nsigs, c.rep.nsig); if (d < bd) { bd = d; best = ci } })
+    clusters.forEach((c, ci) => {
+      // badge charts: round icons of different skills can share a shape – also require a similar colour
+      if (badges && colorDist(avgCol.get(s.index)!, avgCol.get(c.rep.index)!) > 70) return
+      const d = nccDistMulti(s.nsigs, c.rep.nsig); if (d < bd) { bd = d; best = ci }
+    })
     if (best >= 0 && bd < thr) { clusters[best].members.push(s); s.cluster = best }
     else { s.cluster = clusters.length; clusters.push({ rep: s, members: [s], legendIdx: -1 }) }
   }

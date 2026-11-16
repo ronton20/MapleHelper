@@ -66,6 +66,23 @@ Setup: in Cloudflare create a **Workers KV** namespace and bind it to the worker
   enter the key → edit save names, reassign classes, rename/retype nodes, edit the leveling order, replace from JSON,
   download or delete. The key is kept only for the browser session.
 
+## Skill bank (shared, admin-managed)
+
+All HEXA skill icons, names and cores come from the **skill bank** in the same KV namespace (`bank:<classKey>`,
+plus `bank:common` for Sol Janus / Sol Hecate / HEXA Stat). The app caches it in IndexedDB so it works offline.
+
+- **First upload:** Admin → Skill bank → *Upload folder* → pick the `hexa-skills` folder (one sub-folder per class
+  with `skills.csv` = `name,type,slot,primary,icon` + the icon PNGs). Each class's bank is replaced.
+- **New skills later:** Admin → Skill bank → pick the class → *Edit*: add icons to a core, rename, move an icon to
+  another core, or ★ the icon the core shows. Or, while importing a chart as admin, pick the core for an unknown icon
+  and press the 📚 button to add it to the bank.
+- **Chart import** matches every chart icon against the class + common bank: recognised icons get the core's name,
+  type and slot automatically (several icons of one core are merged).
+- **HEXA view:** node icons and default names come from the bank (names can still be renamed per character).
+  Shared templates only store the core, not the icon.
+- Test tools: `npx tsx scripts/bank-check.ts chart.png <classKey>` (match a chart against a local `hexa-skills`
+  folder, `BANK=<dir>`), `npx tsx scripts/bank-parse-test.ts <hexa-skills dir>`.
+
 ## Contact links & Buy Me a Coffee
 
 Edit `src/config.ts`: `SOCIALS.discord` (shown with a copy button at the bottom of the sidebar) and
@@ -77,6 +94,8 @@ Edit `src/config.ts`: `SOCIALS.discord` (shown with a copy button at the bottom 
 src/data/slots.ts       grid layout + slot → item categories
 src/data/hexaCosts.ts   fragment/erda cost tables per node type
 src/data/classes.ts     generic HEXA node list + default flame weights per class type
+src/data/skillBank.ts   skill-bank slots (HEXA cores), lookups, CSV parsing
+src/api/bank.ts         skill bank API + IndexedDB cache
 src/db.ts               Dexie schema, export/import
 src/api/                maplestory.io (icons, search) and nexon rankings (via proxy)
 src/components/         Sidebar, equipment/ (grid, inspector, presets, search), hexa/, SettingsView

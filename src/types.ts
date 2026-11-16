@@ -83,7 +83,9 @@ export interface HexaNodeDef {
   id: string
   name: string
   type: HexaNodeType
-  icon?: string            // URL or data URL
+  /** skill-bank slot (src/data/skillBank.ts): icon and default name come from the shared skill bank */
+  slot?: string
+  icon?: string            // legacy / fallback icon (URL or data URL) – nodes with a slot use the bank's icon
   note?: string
   /** stat nodes only */
   unlockFrags?: number

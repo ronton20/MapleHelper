@@ -1,5 +1,5 @@
 // reads every badge of a badge-style chart and (for the Lethe sample) checks against the hand-read levels:
-// npx tsx scripts/badge-acc.ts chart.png
+// npx tsx scripts/badge-acc.ts chart.png   (file name containing "lethe", "dawn" or "merc" → checked against the hand-read levels)
 import fs from 'node:fs'
 import { PNG } from 'pngjs'
 import { detect } from '../src/lib/chart/detect'
@@ -12,5 +12,6 @@ const rows: string[] = []; let line: string[] = []
 d.seq.forEach((t, i) => { if (i && t.row !== d.seq[i - 1].row) { rows.push(line.join(' ')); line = [] } line.push((res[i].text || '?').padStart(2) + (res[i].conf < 0.5 ? '!' : ' ')) })
 rows.push(line.join(' ')); console.log(rows.join('\n'))
 console.log('split cases', res.map((r, i) => r.text.length === 2 && Number(r.text) > 30 ? `${i}:${r.text}(${r.n})` : '').filter(Boolean).join(' '))
-import { LETHE_TRUTH } from './lethe-truth'
-if (process.argv[2].includes('lethe')) { const bad = LETHE_TRUTH.map((v, i) => Number(res[i].text) === v ? '' : `${i}:${v}→${res[i].text || '?'}`).filter(Boolean); console.log('accuracy', LETHE_TRUTH.length - bad.length, '/', LETHE_TRUTH.length, bad.join(' ')) }
+import { LETHE_TRUTH, DAWN_TRUTH, MERC_TRUTH } from './lethe-truth'
+const TRUTH = process.argv[2].includes('lethe') ? LETHE_TRUTH : process.argv[2].includes('dawn') ? DAWN_TRUTH : process.argv[2].includes('merc') ? MERC_TRUTH : null
+if (TRUTH) { const bad = TRUTH.map((v, i) => Number(res[i].text) === v ? '' : `${i}:${v}→${res[i].text || '?'}`).filter(Boolean); console.log('accuracy', TRUTH.length - bad.length, '/', TRUTH.length, bad.join(' ')) }

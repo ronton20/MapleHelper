@@ -12,7 +12,7 @@ export interface ChartResult {
   steps: ChartStep[]
   warnings: string[]
   headers?: string[]
-  detection: { tileSize: number; rows: { x: number; y: number; w: number; h: number; index: number; row: number; col: number; cluster: number }[][] }
+  detection: { tileSize: number; badges?: boolean; rows: { x: number; y: number; w: number; h: number; index: number; row: number; col: number; cluster: number }[][] }
 }
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '')
