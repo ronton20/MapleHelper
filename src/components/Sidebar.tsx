@@ -1,20 +1,74 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { Plus, Settings, Swords, Hexagon, Trash2, RefreshCw } from 'lucide-react'
+import { Plus, Settings, Swords, Hexagon, Trash2, RefreshCw, GripVertical } from 'lucide-react'
 import { listTemplates, fetchTemplate, type LibraryEntry } from '../api/library'
 import { CLASS_BY_KEY, classKeyForJob } from '../data/gmsClasses'
 import { ClassOptions } from './ClassOptions'
 import { SidebarFooter } from './SidebarFooter'
 import { weightsForClass } from '../data/classes'
-import { db, createCharacter, deleteCharacter, updateCharacter, getSettings } from '../db'
+import { db, createCharacter, deleteCharacter, updateCharacter, getSettings, sortCharacters, reorderCharacters } from '../db'
 import { useUI } from '../store'
 import { lookupCharacter } from '../api/nexon'
 import type { Character, Region } from '../types'
 
 export function Sidebar() {
-  const characters = useLiveQuery(() => db.characters.orderBy('updatedAt').reverse().toArray(), []) ?? []
+  const stored = useLiveQuery(async () => sortCharacters(await db.characters.toArray()), []) ?? []
   const { selectedCharacterId, setCharacter, view, setView } = useUI()
   const [adding, setAdding] = useState(false)
+
+  // ---- drag & drop reordering (pointer events: mouse + touch, via the grip handle) ----
+  // The dragged row follows the pointer, the rows it passes slide out of the way, and on release it glides into
+  // its new place. The new order is shown immediately (optimistic) so nothing jumps back while it is saved.
+  const listRef = useRef<HTMLDivElement>(null)
+  const [drag, setDrag] = useState<{ id: string; from: number; to: number; dy: number; rowH: number; top: number; dropping: boolean } | null>(null)
+  const dragStart = useRef({ y: 0, scroll: 0 })
+  const [optimistic, setOptimistic] = useState<string[] | null>(null)
+  const storedIds = stored.map(c => c.id)
+  useEffect(() => { if (optimistic && optimistic.join() === storedIds.join()) setOptimistic(null) }, [optimistic, storedIds.join()])
+  const characters = optimistic ? optimistic.map(id => stored.find(c => c.id === id)).filter((c): c is Character => !!c).concat(stored.filter(c => !optimistic.includes(c.id))) : stored
+  const ids = characters.map(c => c.id)
+
+  function startDrag(e: React.PointerEvent, id: string) {
+    e.preventDefault(); e.stopPropagation()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-char-row="${id}"]`)
+    const rowH = row ? row.getBoundingClientRect().height + parseFloat(getComputedStyle(row).marginBottom || '0') : 60
+    dragStart.current = { y: e.clientY, scroll: listRef.current?.scrollTop ?? 0 }
+    const from = ids.indexOf(id)
+    setDrag({ id, from, to: from, dy: 0, rowH, top: row?.offsetTop ?? 0, dropping: false })
+  }
+  function moveDrag(e: React.PointerEvent) {
+    if (!drag || drag.dropping) return
+    const list = listRef.current
+    if (list) {   // auto-scroll near the edges
+      const r = list.getBoundingClientRect()
+      if (e.clientY < r.top + 28) list.scrollTop -= 8
+      else if (e.clientY > r.bottom - 28) list.scrollTop += 8
+    }
+    const dy = e.clientY - dragStart.current.y + ((list?.scrollTop ?? 0) - dragStart.current.scroll)
+    const to = Math.max(0, Math.min(ids.length - 1, drag.from + Math.round(dy / drag.rowH)))
+    setDrag({ ...drag, dy, to })
+  }
+  function endDrag() {
+    if (!drag || drag.dropping) return
+    const d = drag
+    const order = [...ids]; order.splice(d.from, 1); order.splice(d.to, 0, d.id)
+    // glide into the target slot, then commit
+    setDrag({ ...d, dy: (d.to - d.from) * d.rowH, dropping: true })
+    window.setTimeout(() => {
+      setDrag(null)
+      if (order.join() !== storedIds.join() || stored.some(c => c.sortOrder === undefined)) { setOptimistic(order); reorderCharacters(order) }
+    }, 160)
+  }
+  /** visual offset of a row while dragging: the dragged one follows the pointer, the ones it passed make room */
+  function rowShift(i: number, id: string): number {
+    if (!drag) return 0
+    if (id === drag.id) return drag.dy
+    if (drag.from < drag.to && i > drag.from && i <= drag.to) return -drag.rowH
+    if (drag.from > drag.to && i >= drag.to && i < drag.from) return drag.rowH
+    return 0
+  }
+
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-panel max-[900px]:w-full">
@@ -35,12 +89,17 @@ export function Sidebar() {
         <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)} title="Add character"><Plus size={14} /></button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 pt-1.5 pb-1">
+      <div ref={listRef} className="relative flex-1 overflow-y-auto px-2 pt-1.5 pb-1">
+        {/* drop target outline */}
+        {drag && <div className="pointer-events-none absolute right-2 left-2 rounded-md border-2 border-dashed border-accent/50 bg-accent/5 transition-[top] duration-150 ease-out" style={{ top: drag.top + (drag.to - drag.from) * drag.rowH, height: drag.rowH - 4 }} />}
         {characters.length === 0 && (
           <div className="px-2 py-6 text-center text-xs text-muted">No characters yet.<br />Click + to add one.</div>
         )}
-        {characters.map(c => (
-          <CharRow key={c.id} c={c} active={c.id === selectedCharacterId} onClick={() => { setCharacter(c.id); if (view === 'settings') setView('equipment') }} />
+        {characters.map((c, i) => (
+          <CharRow key={c.id} c={c} active={c.id === selectedCharacterId} dragging={drag?.id === c.id}
+            style={drag ? { transform: `translateY(${rowShift(i, c.id)}px)${drag.id === c.id && !drag.dropping ? ' scale(1.03)' : ''}`, transition: drag.id === c.id && !drag.dropping ? 'none' : 'transform 160ms ease' } : undefined}
+            onClick={() => { setCharacter(c.id); if (view === 'settings') setView('equipment') }}
+            grip={characters.length > 1 ? { onPointerDown: e => startDrag(e, c.id), onPointerMove: moveDrag, onPointerUp: endDrag, onPointerCancel: endDrag } : undefined} />
         ))}
       </div>
 
@@ -59,9 +118,13 @@ function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: ()
   )
 }
 
-function CharRow({ c, active, onClick }: { c: Character; active: boolean; onClick: () => void }) {
+type GripHandlers = { onPointerDown: (e: React.PointerEvent) => void; onPointerMove: (e: React.PointerEvent) => void; onPointerUp: () => void; onPointerCancel: () => void }
+function CharRow({ c, active, onClick, grip, dragging, style }: { c: Character; active: boolean; onClick: () => void; grip?: GripHandlers; dragging?: boolean; style?: React.CSSProperties }) {
   return (
-    <div onClick={onClick} className={`group mb-1 flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 transition-colors ${active ? 'bg-accent/10 ring-1 ring-accent/40' : 'hover:bg-panel-2'}`}>
+    <div data-char-row={c.id} onClick={onClick} style={style} className={`group relative mb-1 flex cursor-pointer items-center gap-3 rounded-md py-2 pr-2 pl-1 ${active ? 'bg-accent/10 ring-1 ring-accent/40' : 'hover:bg-panel-2'} ${dragging ? 'z-20 bg-panel shadow-xl shadow-black/40 ring-2 ring-accent/70' : ''}`}>
+      {grip
+        ? <span {...grip} onClick={e => e.stopPropagation()} title="Drag to reorder" className={`-mr-2 flex h-10 w-4 shrink-0 cursor-grab touch-none items-center justify-center text-muted/40 hover:text-muted active:cursor-grabbing ${dragging ? 'text-muted' : ''}`}><GripVertical size={14} /></span>
+        : <span className="-mr-2 w-4 shrink-0" />}
       <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-panel-2">
         {c.imageUrl ? <img src={c.imageUrl} alt="" className="pixel h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center text-xs text-muted">{c.name.slice(0, 2)}</div>}
       </div>

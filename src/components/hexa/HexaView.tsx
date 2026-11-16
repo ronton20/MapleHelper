@@ -3,11 +3,12 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { nanoid } from 'nanoid'
 import { useIsMobile } from '../../store'
 import { classKeyForJob } from '../../data/gmsClasses'
-import { Plus, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, X, RotateCcw, ChevronRight, ListOrdered, Wand2, ScanSearch, Share2, Replace } from 'lucide-react'
+import { Plus, Trash2, ArrowUp, ArrowDown, X, RotateCcw, ChevronRight, ListOrdered, Wand2, ScanSearch, Share2, Replace } from 'lucide-react'
 import { db, defaultHexaProfile, migrateHexaProfile, resolveClass, updateCharacter } from '../../db'
 import { ChartImportDialog, type ImportOutcome } from './ChartImportDialog'
 import { ShareTemplateDialog } from './ShareTemplateDialog'
 import { ChangeOrderDialog } from './ChangeOrderDialog'
+import { rowNavProps } from '../../lib/rowNav'
 import { GENERIC_NODES } from '../../data/classes'
 import { costBetween, totalToMax, maxLevel, GROUPS, GROUP_LABEL, GROUP_COLOR, GROUP_OF, GROUP_TYPES, NODE_TYPE_LABEL, STAT_FRAGS_PER_LEVEL } from '../../data/hexaCosts'
 import type { Character, HexaProfile, HexaNodeDef, HexaNodeType, HexaCheckpoint, HexaOrderStep } from '../../types'
@@ -57,7 +58,6 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
     const n = profile.nodes.find(n => n.id === id); if (!n) return
     save({ levels: { ...profile.levels, [id]: Math.max(0, Math.min(maxLevel(n.type), lvl)) } })
   }
-  const fileRef = useRef<HTMLInputElement>(null)
   const [showImage, setShowImage] = useState(true)
   const [editingOrder, setEditingOrder] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -147,10 +147,6 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
     const levels: Record<string, number> = {}
     for (const n of nodes) levels[n.id] = profile.levels[n.id] ?? (n.type === 'origin' ? 1 : 0)
     save({ nodes, levels, order: cls?.order ?? [], autoPath: !!cls?.order?.length, path: profile.path.filter(c => nodes.some(n => n.id === c.nodeId)) })
-  }
-  function onImage(file: File | undefined) {
-    if (!file) return
-    const r = new FileReader(); r.onload = () => save({ pathImage: String(r.result) }); r.readAsDataURL(file)
   }
   async function applyImport(o: ImportOutcome) {
     // keep current levels where node names match (case-insensitive)
@@ -277,7 +273,7 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
                   <span className="text-[11px] text-muted">{s.from}</span><ChevronRight size={12} className="text-muted" />
                   {profile.autoPath
                     ? <span className="w-8 text-center text-xs font-medium">{s.targetLevel}</span>
-                    : <input type="number" min={1} max={30} value={s.targetLevel} onChange={e => updCp(s.id, { targetLevel: Math.max(1, Math.min(30, Number(e.target.value))) })} className="w-14 py-1 text-center text-xs" />}
+                    : <input type="number" min={1} max={30} value={s.targetLevel} onChange={e => updCp(s.id, { targetLevel: Math.max(1, Math.min(30, Number(e.target.value))) })} {...rowNavProps('hexa-path')} className="w-14 py-1 text-center text-xs" />}
                   <span className={`${mobile ? 'w-16 text-[10px] leading-tight' : 'w-28 text-[11px]'} text-right text-muted`} title={`cumulative ${fmt(s.cumFrags)} frags · ${s.erda} erda`}>
                     {s.done ? 'done' : mobile ? `${fmt(s.frags)}f\n${s.cumDays < 0.05 ? 'now' : `${s.cumDays.toFixed(1)}d`}` : `${fmt(s.frags)}f · ${s.erda}e · ${s.cumDays < 0.05 ? 'now' : `${s.cumDays.toFixed(1)}d`}`}
                   </span>
@@ -304,8 +300,6 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
                 {profile.pathImage && <div className="flex gap-0.5">{[1, 2, 3].map(z => <button key={z} className={`btn btn-sm ${zoom === z ? 'btn-primary' : ''}`} onClick={() => setZoom(z)}>{z}×</button>)}</div>}
                 {profile.pathImage && <button className="btn btn-ghost btn-sm" onClick={() => setShowImage(v => !v)}>{showImage ? 'Hide' : 'Show'}</button>}
                 {profile.pathImage && <button className="btn btn-ghost btn-sm" onClick={() => save({ pathImage: null })}><X size={12} /></button>}
-                <button className="btn btn-sm" onClick={() => fileRef.current?.click()}><ImageIcon size={12} />{profile.pathImage ? 'Replace' : 'Upload'}</button>
-                <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => onImage(e.target.files?.[0])} />
                 <button className="btn btn-sm btn-primary" title="Read skills, icons and the leveling order from a chart image" onClick={() => importRef.current?.click()}><ScanSearch size={12} />Import chart</button>
                 <input ref={importRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setImportFile(f); e.target.value = '' }} />
               </div>
@@ -392,7 +386,7 @@ function NodeRow({ node, level, onLevel, onChange, onRemove }: { node: HexaNodeD
       {bankName && shown !== bankName && <button className="btn btn-ghost btn-sm opacity-0 group-hover:opacity-100" title={`Reset name to "${bankName}"`} onClick={() => onChange({ name: bankName })}><RotateCcw size={11} /></button>}
       <span className="w-16 text-right text-[10px] uppercase tracking-wider text-muted">{node.slot ? SLOT_BY_KEY[node.slot]?.label.replace(/ \(.*\)$/, '') ?? NODE_TYPE_LABEL[node.type] : NODE_TYPE_LABEL[node.type]}</span>
       <button className="btn btn-ghost btn-sm" onClick={() => onLevel(level - 1)}>−</button>
-      <input type="number" min={0} max={max} value={level} onChange={e => onLevel(Number(e.target.value))} className={`w-12 py-0.5 text-center text-sm ${level >= max ? 'text-legendary' : ''}`} />
+      <input type="number" min={0} max={max} value={level} onChange={e => onLevel(Number(e.target.value))} {...rowNavProps('hexa-level')} className={`w-12 py-0.5 text-center text-sm ${level >= max ? 'text-legendary' : ''}`} />
       <button className="btn btn-ghost btn-sm" onClick={() => onLevel(level + 1)}>+</button>
       <span className="w-24 text-right text-[11px] text-muted">{level >= max ? 'MAX' : `${fmt(toMax.frags)} to max`}</span>
       <button className="btn btn-ghost btn-sm opacity-0 group-hover:opacity-100" onClick={onRemove}><Trash2 size={12} /></button>

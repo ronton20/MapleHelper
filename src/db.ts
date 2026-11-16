@@ -111,6 +111,8 @@ export async function createCharacter(input: { name: string; world?: string; job
   const preset = newPreset()
   const cls = await resolveClass(input.classId ?? null)
   const weights: FlameWeights = weightsForClass(input.classKey)
+  // once the user has ordered the sidebar, new characters go to the bottom
+  const orders = (await db.characters.toArray()).map(x => x.sortOrder).filter((x): x is number => x !== undefined)
   const c: Character = {
     id: nanoid(10),
     name: input.name,
@@ -125,6 +127,7 @@ export async function createCharacter(input: { name: string; world?: string; job
     presets: [preset],
     activePresetId: preset.id,
     flameWeights: weights,
+    ...(orders.length ? { sortOrder: Math.max(...orders) + 1 } : {}),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }
@@ -142,6 +145,28 @@ export function defaultHexaProfile(characterId: string, nodes: HexaNodeDef[], or
 /** fill in fields added after v1 for profiles stored by older versions */
 export function migrateHexaProfile(p: HexaProfile): HexaProfile {
   return { ...p, order: p.order ?? [], autoPath: p.autoPath ?? false }
+}
+
+/** sidebar order: characters with a sortOrder by it; ones without (older data) first, most recently edited first */
+export function sortCharacters(cs: Character[]): Character[] {
+  return [...cs].sort((a, b) => {
+    const A = a.sortOrder, B = b.sortOrder
+    if (A === undefined && B === undefined) return b.updatedAt - a.updatedAt
+    if (A === undefined) return -1
+    if (B === undefined) return 1
+    return A - B
+  })
+}
+
+/** save a new sidebar order (ids top → bottom); only touched characters get a new updatedAt (so it syncs) */
+export async function reorderCharacters(ids: string[]) {
+  const now = Date.now()
+  await db.transaction('rw', db.characters, async () => {
+    for (const [i, id] of ids.entries()) {
+      const c = await db.characters.get(id)
+      if (c && c.sortOrder !== i) await db.characters.put({ ...c, sortOrder: i, updatedAt: now })
+    }
+  })
 }
 
 export async function updateCharacter(id: string, patch: Partial<Character> | ((c: Character) => Character)) {

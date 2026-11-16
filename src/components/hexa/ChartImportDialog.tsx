@@ -8,14 +8,14 @@ import type { HexaNodeDef, HexaNodeType, HexaOrderStep } from '../../types'
 import { db, getSettings } from '../../db'
 import { publishTemplate, getAdminKey } from '../../api/library'
 import { loadBanks, adminSaveBank } from '../../api/bank'
-import { bankRefs, matchTile, canvasPixels } from '../../lib/chart/bankMatch'
+import { bankRefs, bankColorRefs, matchTile, coreDistances, canvasPixels, SPLIT_MAX, SPLIT_MARGIN } from '../../lib/chart/bankMatch'
 import { COMMON_BANK, SLOTS, SLOT_BY_KEY, coreEntry, coreName, slotRank, type SkillBank } from '../../data/skillBank'
 import { CLASS_BY_KEY } from '../../data/gmsClasses'
 import { ClassOptions } from '../ClassOptions'
 
 export interface ImportOutcome { nodes: HexaNodeDef[]; order: HexaOrderStep[]; imageDataUrl: string; templateId?: string; classKey?: string }
 
-interface SkillRow { id: string; name: string; type: HexaNodeType | ''; icon: string; count: number; mergedInto: string | null; slot: string; matched: boolean; plainStat?: boolean; box: { x: number; y: number; w: number; h: number } }
+interface SkillRow { id: string; name: string; type: HexaNodeType | ''; icon: string; count: number; mergedInto: string | null; slot: string; matched: boolean; likely?: boolean; plainStat?: boolean; box: { x: number; y: number; w: number; h: number } }
 interface StepRow { index: number; skillId: string; level: number | null; conf: number; icon: string }
 
 export function ChartImportDialog({ file, className, classKey: initialClassKey = '', onClose, onApply }: { file: File; className: string; classKey?: string; onClose: () => void; onApply: (o: ImportOutcome) => void }) {
@@ -75,14 +75,30 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
       const refs = await bankRefs(entries, badges)
       const px = canvasPixels(canvas)
       // match, then fold rows that landed on the same core into the most frequent one
-      const rows = baseSkills.current.map(s => {
+      const claimed = new Set<string>()
+      const rows: SkillRow[] = baseSkills.current.map(s => {
         const hit = matchTile(px, s.box, badges, refs)
         if (!hit) return { ...s }
         const def = SLOT_BY_KEY[hit.slot]
         // the plain HEXA Stat icon doesn't say which stat it is → keep the chart's numbering
         if (hit.slot === 'stat') return { ...s, type: 'stat' as HexaNodeType, matched: true, plainStat: true, slot: '' }
+        if (hit.dist <= 0.3) claimed.add(hit.slot)
         return { ...s, slot: hit.slot, type: def.type, name: coreName(hit.slot, b.cls, b.common), matched: true }
       })
+      // icons left over: maybe a core drawn as a split / composite icon (one part per skill) → score every core
+      // the chart hasn't clearly used yet part by part; a clear winner is taken as "probably" (≈, to check)
+      const left = rows.filter(r => !r.matched)
+      if (left.length) {
+        const cand = new Set(entries.map(e => e.slot).filter(sl => sl !== 'stat' && !claimed.has(sl)))
+        const crefs = await bankColorRefs(entries, badges)
+        if (cancelled) return
+        for (const r of left) {
+          const ds = coreDistances(px, r.box, badges, crefs, cand)
+          if (!ds.length || ds[0].dist > SPLIT_MAX || (ds[1]?.dist ?? 1) - ds[0].dist < SPLIT_MARGIN) continue
+          const def = SLOT_BY_KEY[ds[0].slot]
+          Object.assign(r, { slot: def.key, type: def.type, name: coreName(def.key, b.cls, b.common), matched: true, likely: true })
+        }
+      }
       const target = new Map<string, SkillRow>()
       for (const r of [...rows].sort((a, c) => c.count - a.count)) {
         if (!r.slot) continue
@@ -115,8 +131,9 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
       if (cancelled) return
       setSkills(rows)
       setSteps(stepRows)
-      const n = rows.filter(r => r.matched && !r.mergedInto).length
-      setBankMsg(`${n} of ${rows.filter(r => !r.mergedInto).length} skills recognised from the skill bank${b.cls ? '' : ' (no bank for this class yet – only common icons)'}.`)
+      const live = rows.filter(r => !r.mergedInto)
+      const n = live.filter(r => r.matched && !r.likely).length, nl = live.filter(r => r.likely).length
+      setBankMsg(`${n} of ${live.length} skills recognised from the skill bank${nl ? `, ${nl} probably (≈ – split/unclear icons, please check)` : ''}${b.cls ? '' : ' (no bank for this class yet – only common icons)'}.`)
     })()
     return () => { cancelled = true }
   }, [phase, canvas, classKey, badges])
@@ -133,7 +150,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
     if (v.startsWith('slot:')) {
       const slot = v.slice(5); const def = SLOT_BY_KEY[slot]
       const wasDefault = !s.name.trim() || (!!s.slot && s.name === coreName(s.slot, banks.cls, banks.common))
-      updSkill(s.id, { slot, type: def.type, ...(wasDefault || !s.name.trim() ? { name: coreName(slot, banks.cls, banks.common) } : {}) })
+      updSkill(s.id, { slot, type: def.type, matched: false, likely: false, ...(wasDefault || !s.name.trim() ? { name: coreName(slot, banks.cls, banks.common) } : {}) })
     } else updSkill(s.id, { slot: '', type: v.slice(5) as HexaNodeType | '' })
   }
   const isAdmin = !!getAdminKey()
@@ -151,7 +168,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
     try {
       const saved = await adminSaveBank({ ...cur, entries: [...cur.entries, { slot: s.slot, name: s.name.trim() || coreName(s.slot, banks.cls, banks.common), primary: !hasCore, icon: c.toDataURL('image/png') }] })
       setBanks(b => def.bank === 'common' ? { ...b, common: saved } : { ...b, cls: saved })
-      updSkill(s.id, { matched: true })
+      updSkill(s.id, { matched: true, likely: false })
     } catch (e) { alert((e as Error).message) }
   }
   function removeSkill(id: string) { setSkills(ss => ss.filter(s => s.id !== id)); setSteps(st => st.filter(s => resolve(s.skillId) !== id)) }
@@ -243,7 +260,12 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
                       {GROUPS.flatMap(g => GROUP_TYPES[g].map(t => <option key={t} value={`type:${t}`}>{GROUP_LABEL[g]} · {NODE_TYPE_LABEL[t]}</option>))}
                     </optgroup>
                   </select>
-                  {s.matched
+                  {s.matched && s.likely
+                    ? <span className="flex items-center gap-0.5">
+                        <span title="Probably this core (split or unclear icon) – please check" className="w-[14px] text-center text-sm font-bold leading-none text-legendary">≈</span>
+                        {isAdmin && <button className="btn btn-ghost btn-sm" title="Admin: confirm by adding this icon to the skill bank under this core" onClick={() => addToBank(s)}><Library size={12} /></button>}
+                      </span>
+                    : s.matched
                     ? <span title="Recognised from the skill bank" className="text-accent"><BadgeCheck size={14} /></span>
                     : isAdmin && s.slot
                       ? <button className="btn btn-ghost btn-sm" title="Admin: add this icon to the skill bank under the picked core" onClick={() => addToBank(s)}><Library size={12} /></button>

@@ -70,6 +70,8 @@ export interface Character {
   presets: Preset[]
   activePresetId: string
   flameWeights: FlameWeights
+  /** position in the sidebar (drag & drop); characters without one are listed first, newest edit first */
+  sortOrder?: number
   createdAt: number
   updatedAt: number
 }
