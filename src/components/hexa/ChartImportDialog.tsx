@@ -6,7 +6,7 @@ import { loadImage, analyzeInWorker, cropDataUrl, type ChartResult } from '../..
 import { GROUPS, GROUP_LABEL, GROUP_TYPES, NODE_TYPE_LABEL, maxLevel, STAT_MAX_LEVEL } from '../../data/hexaCosts'
 import type { HexaNodeDef, HexaNodeType, HexaOrderStep } from '../../types'
 import { db, getSettings } from '../../db'
-import { publishTemplate, getAdminKey } from '../../api/library'
+import { publishTemplate, getAdminKey, DuplicatePathError } from '../../api/library'
 import { loadBanks, adminSaveBank } from '../../api/bank'
 import { bankRefs, bankColorRefs, matchTile, coreDistances, canvasPixels, SPLIT_MAX, SPLIT_MARGIN } from '../../lib/chart/bankMatch'
 import { COMMON_BANK, SLOTS, SLOT_BY_KEY, coreEntry, coreName, slotRank, type SkillBank } from '../../data/skillBank'
@@ -219,7 +219,16 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
       templateId = nanoid(8)
       const tpl = { id: templateId, name: templateName.trim(), classKey, nodes, order, source: `imported chart (${file.name})`, createdAt: Date.now() }
       await db.templates.put(tpl)
-      if (publish) { try { const s = await getSettings(); await publishTemplate(tpl, s.publishKey) } catch (e) { alert(`Saved locally, but publishing failed: ${(e as Error).message}`) } }
+      if (publish) {
+        try { const s = await getSettings(); await publishTemplate(tpl, s.publishKey) }
+        catch (e) {
+          if (e instanceof DuplicatePathError) {
+            // the class already has this exact path – don't keep a second copy unless a local save was asked for
+            if (!saveTemplate) { await db.templates.delete(templateId); templateId = undefined }
+            alert(e.message)
+          } else alert(`${saveTemplate ? 'Saved locally, but publishing' : 'Publishing'} failed: ${(e as Error).message}`)
+        }
+      }
     }
     onApply({ nodes, order, imageDataUrl: dataUrl, templateId, classKey })
   }

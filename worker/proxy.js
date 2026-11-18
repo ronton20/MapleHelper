@@ -3,7 +3,8 @@
  *   GET  /?url=<nexon rankings url>     CORS proxy for the GMS rankings JSON (only www.nexon.com is allowed)
  *   GET  /templates[?class=<key>]       list shared HEXA templates, optionally only one class  (needs KV binding "TEMPLATES")
  *   GET  /templates/:id                 one template
- *   POST /templates                     publish a template (JSON body with classKey; optional PUBLISH_KEY secret → x-publish-key header)
+ *   POST /templates                     publish a template (JSON body with classKey; optional PUBLISH_KEY secret → x-publish-key header);
+ *                                       409 + {duplicate:{id,name}} if the class already has the same leveling path
  *   PUT  /templates/:id                 admin: replace a template          (ADMIN_KEY secret → x-admin-key header)
  *   DELETE /templates/:id               admin: delete a template
  *   GET  /admin/check                   admin: verify the key
@@ -22,6 +23,44 @@
 const ALLOWED_HOST = 'www.nexon.com'
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS', 'Access-Control-Allow-Headers': '*' }
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', ...CORS } })
+
+// ---- leveling-path comparison: every step becomes "<core>@<level>", where <core> is the node's skill-bank
+// slot (its type, e.g. m2 / b3 / c1) – or, for a node without one, the slot whose bank name matches its name,
+// or a generic label ("Mastery 2" → m2) – so paths compare the same whatever the uploader renamed things to
+const norm = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const LABEL_SLOT = (n) => {
+  const m = n.match(/^(origin|ascent)( skill)?$/); if (m) return m[1] === 'origin' ? 'o1' : 'a1'
+  if (n === 'skill 3') return 'k1'
+  const x = n.match(/^(mastery|boost) ([1-4])$/); return x ? `${x[1] === 'mastery' ? 'm' : 'b'}${x[2]}` : null
+}
+async function bankNames(env, classKey) {
+  const byName = new Map()
+  for (const key of [classKey, 'common']) {
+    const b = await env.TEMPLATES.get(`bank:${key}`, 'json').catch(() => null)
+    for (const e of b?.entries ?? []) if (!byName.has(norm(e.name))) byName.set(norm(e.name), e.slot)
+  }
+  return byName
+}
+function pathSig(tpl, byName) {
+  const core = new Map(tpl.nodes.map(n => [n.id, n.slot || byName.get(norm(n.name)) || LABEL_SLOT(norm(n.name)) || `name:${norm(n.name)}`]))
+  return tpl.order.map(s => `${core.get(s.nodeId) ?? `id:${s.nodeId}`}@${Number(s.level)}`).join('|')
+}
+async function findDuplicatePath(env, tpl) {
+  if (!tpl.order.length) return null
+  const byName = await bankNames(env, tpl.classKey)
+  const sig = pathSig(tpl, byName)
+  let cursor
+  do {
+    const list = await env.TEMPLATES.list({ prefix: 'tpl:', cursor })
+    for (const k of list.keys) {
+      if (k.metadata?.classKey !== tpl.classKey || k.metadata?.steps !== tpl.order.length) continue
+      const other = await env.TEMPLATES.get(k.name, 'json').catch(() => null)
+      if (other && other.id !== tpl.id && Array.isArray(other.nodes) && Array.isArray(other.order) && pathSig(other, byName) === sig) return other
+    }
+    cursor = list.list_complete ? undefined : list.cursor
+  } while (cursor)
+  return null
+}
 
 export default {
   async fetch(request, env) {
@@ -109,6 +148,8 @@ export default {
         const body = JSON.stringify(tpl)
         if (body.length > 2_000_000) return json({ error: 'template too large' }, 413)
         if (await env.TEMPLATES.get(`tpl:${tpl.id}`) && !isAdmin) return json({ error: 'a template with this id exists' }, 409)
+        const dup = await findDuplicatePath(env, tpl)
+        if (dup) return json({ error: `This leveling path already exists for this class as "${dup.name}".`, duplicate: { id: dup.id, name: dup.name } }, 409)
         await env.TEMPLATES.put(`tpl:${tpl.id}`, body, { metadata: meta(tpl) })
         return json({ ok: true, id: tpl.id })
       }

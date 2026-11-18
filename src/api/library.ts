@@ -28,7 +28,22 @@ export async function fetchTemplate(id: string): Promise<ClassTemplate> {
 
 export async function publishTemplate(tpl: ClassTemplate, key = ''): Promise<void> {
   const res = await fetch(`${base()}/templates`, { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { 'x-publish-key': key } : {}) }, body: JSON.stringify(tpl) })
-  if (!res.ok) throw new Error(`Publish failed (${res.status}): ${await res.text()}`)
+  if (res.ok) return
+  const text = await res.text()
+  let body: { error?: string; duplicate?: { id: string; name: string } } = {}
+  try { body = JSON.parse(text) } catch { /* not JSON */ }
+  if (res.status === 409 && body.duplicate) throw new DuplicatePathError(body.duplicate.id, body.duplicate.name)
+  throw new Error(`Publish failed (${res.status}): ${body.error ?? text}`)
+}
+
+/** the class already has a shared save with exactly this leveling path (compared by skill-bank core + level) */
+export class DuplicatePathError extends Error {
+  id: string
+  existingName: string
+  constructor(id: string, existingName: string) {
+    super(`Not shared: this leveling path already exists for this class as "${existingName}".`)
+    this.id = id; this.existingName = existingName
+  }
 }
 
 // ---- admin ----------------------------------------------------------------------------------

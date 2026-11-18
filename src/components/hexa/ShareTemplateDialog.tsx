@@ -5,7 +5,7 @@ import { Modal } from '../Sidebar'
 import { ClassOptions } from '../ClassOptions'
 import { CLASS_BY_KEY, classKeyForJob } from '../../data/gmsClasses'
 import { db, getSettings, updateCharacter, BUILD_PROXY_URL } from '../../db'
-import { publishTemplate } from '../../api/library'
+import { publishTemplate, DuplicatePathError } from '../../api/library'
 import { loadBanks } from '../../api/bank'
 import { coreEntry } from '../../data/skillBank'
 import type { Character, ClassTemplate, HexaNodeDef, HexaProfile } from '../../types'
@@ -42,12 +42,13 @@ export function ShareTemplateDialog({ character, profile, onClose }: { character
         return n.slot && coreEntry(n.slot, banks.cls, banks.common) ? rest : { ...rest, icon: await shrinkIcon(icon) }
       }))
       const tpl: ClassTemplate = { id: nanoid(8), name: name.trim(), classKey, nodes, order: profile.order, source: 'shared from a character', createdAt: Date.now() }
+      await publishTemplate(tpl, (await getSettings()).publishKey)   // rejected (nothing saved) if the class already has this path
       await db.templates.put(tpl)
-      await publishTemplate(tpl, (await getSettings()).publishKey)
       await updateCharacter(character.id, { classId: `tpl:${tpl.id}`, classKey })
       setMsg({ ok: true, text: `Shared! Other ${CLASS_BY_KEY[classKey]?.name ?? ''} players will see "${tpl.name}" when they pick their HEXA data.` })
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message })
+      if (e instanceof DuplicatePathError) alert(e.message)
     } finally { setBusy(false) }
   }
 
