@@ -10,7 +10,7 @@ export function SidebarFooter() {
   }
   if (!SOCIALS.discord && !BUY_ME_A_COFFEE) return null
   return (
-    <div className="space-y-2 border-t border-line px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div data-tour="sidebar-footer" className="space-y-2 border-t border-line px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       {SOCIALS.discord && (
         <div>
           <div className="label mb-1 px-1">Bugs &amp; ideas</div>

@@ -10,6 +10,8 @@ import { useUI } from '../store'
 import { weightsForClass } from '../data/classes'
 import { DA_HP_WEIGHT, describeWeights } from '../lib/flame'
 import type { FlameWeights } from '../types'
+import { HelpButton } from '../tutorial/Tutorial'
+import { useTutorial } from '../tutorial/store'
 
 export function SettingsView() {
   const settings = useLiveQuery(() => getSettings(), [])
@@ -35,9 +37,9 @@ export function SettingsView() {
   return (
     <div className="h-full overflow-y-auto">
     <div className="mx-auto max-w-2xl space-y-6 p-6" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
-      <h1 className="text-lg font-semibold">Settings</h1>
+      <div className="flex items-center justify-between"><h1 className="text-lg font-semibold">Settings</h1><HelpButton guide="settings" /></div>
 
-      <section className="card space-y-3 p-4">
+      <section data-tour="set-apis" className="card space-y-3 p-4">
         <div className="label">APIs</div>
         <div>
           <div className="mb-1 text-sm">maplestory.io GMS version</div>
@@ -52,7 +54,7 @@ export function SettingsView() {
       </section>
 
       {character && (
-        <section className="card space-y-3 p-4">
+        <section data-tour="set-weights" className="card space-y-3 p-4">
           <div className="flex items-center justify-between">
             <div className="label">Flame score weights · {character.name}</div>
             <button className="btn btn-sm" onClick={() => updateCharacter(character.id, { flameWeights: weightsForClass(character.classKey) })}>Reset to defaults</button>
@@ -64,7 +66,7 @@ export function SettingsView() {
 
       {syncAvailable() && <SyncSection />}
 
-      <section className="card space-y-3 p-4">
+      <section data-tour="set-backup" className="card space-y-3 p-4">
         <div className="label">Backup</div>
         <div className="flex flex-wrap gap-2">
           <button className="btn" onClick={doExport}><Download size={14} />Export JSON</button>
@@ -74,9 +76,24 @@ export function SettingsView() {
         <div className="text-[11px] text-muted">All data lives in this browser (IndexedDB). Export regularly, or to move to another device.</div>
       </section>
 
+      <TutorialSection />
+
       {BUILD_PROXY_URL && <AdminSection />}
     </div>
     </div>
+  )
+}
+
+function TutorialSection() {
+  const { reset, skipped, seen } = useTutorial()
+  return (
+    <section data-tour="set-tutorial" className="card flex flex-wrap items-center justify-between gap-2 p-4">
+      <div>
+        <div className="label">Tutorial</div>
+        <div className="mt-1 text-[11px] text-muted">{skipped ? 'Skipped. ' : seen.length ? `${seen.length} part(s) seen. ` : ''}Every page also has a ? button with a short guide.</div>
+      </div>
+      <button className="btn btn-sm" onClick={reset}>Restart tutorial</button>
+    </section>
   )
 }
 
@@ -145,7 +162,7 @@ function SyncSection() {
   const last = lastSync()
 
   return (
-    <section className="card space-y-3 p-4">
+    <section data-tour="set-sync" className="card space-y-3 p-4">
       <div className="label">Sync between devices</div>
       {!key ? (
         <>

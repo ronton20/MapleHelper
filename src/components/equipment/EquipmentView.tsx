@@ -14,6 +14,8 @@ import { classKeyForJob, CLASS_BY_KEY } from '../../data/gmsClasses'
 import { PresetBar } from './PresetBar'
 import { AddCharacterDialog } from '../Sidebar'
 import { lookupCharacter } from '../../api/nexon'
+import { HelpButton } from '../../tutorial/Tutorial'
+import { useTour } from '../../tutorial/store'
 
 export function EquipmentView({ character }: { character: Character }) {
   const { selectedSlot, setSlot } = useUI()
@@ -22,6 +24,7 @@ export function EquipmentView({ character }: { character: Character }) {
   const [editing, setEditing] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const preset = character.presets.find(p => p.id === character.activePresetId) ?? character.presets[0]
+  useTour('gear')
 
   async function resync() {
     setSyncing(true)
@@ -52,7 +55,7 @@ export function EquipmentView({ character }: { character: Character }) {
           <div className={`${mobile ? 'hidden' : 'h-14 w-14'} overflow-hidden rounded-lg bg-panel-2`}>
             {character.imageUrl && <img src={character.imageUrl} alt="" className="pixel h-full w-full object-contain" />}
           </div>
-          <div className="min-w-0 flex-1">
+          <div data-tour="char-header" className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <h1 className={`truncate font-semibold ${mobile ? 'text-base' : 'text-lg'}`}>{character.name}</h1>
               <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)} title="Edit"><Pencil size={13} /></button>
@@ -61,6 +64,7 @@ export function EquipmentView({ character }: { character: Character }) {
             <div className="text-xs text-muted">{character.job || '—'}{character.level ? ` · Lv. ${character.level}` : ''}{character.world ? ` · ${character.world}` : ''}</div>
           </div>
           <Summary preset={preset} compact={mobile} />
+          <HelpButton guide="gear" className="self-start" />
         </div>
 
         <PresetBar character={character} />
@@ -94,9 +98,9 @@ function Summary({ preset, compact }: { preset: Preset; compact?: boolean }) {
   const stars = entries.reduce((a, [, i]) => a + i.starForce, 0)
   const starGoal = entries.reduce((a, [, i]) => a + Math.max(i.starForce, i.starForceGoal), 0)
   const below = entries.filter(([, i]) => i.starForce < i.starForceGoal).length
-  if (compact) return <div className="text-right text-xs text-muted">{items.length}/{SLOTS.length} items · ★ {stars}/{starGoal}</div>
+  if (compact) return <div data-tour="gear-summary" className="text-right text-xs text-muted">{items.length}/{SLOTS.length} items · ★ {stars}/{starGoal}</div>
   return (
-    <div className="flex gap-6 text-right">
+    <div data-tour="gear-summary" className="flex gap-6 text-right">
       <Stat label="Items" value={`${items.length}/${SLOTS.length}`} />
       <Stat label="Stars" value={`${stars}/${starGoal}`} />
       <Stat label="Below goal" value={String(below)} warn={below > 0} />
@@ -117,7 +121,7 @@ function EquipGrid({ character, preset, selected, onSelect, mobile }: { characte
   const hoverItem = hover ? preset.slots[hover.slot] : undefined
   return (
     <>
-    <div className={`card ${mobile ? 'p-2' : 'p-4'}`} style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL})`, gridTemplateRows: `repeat(6, ${CELL})`, gap: GAP }}>
+    <div data-tour="equip-grid" className={`card ${mobile ? 'p-2' : 'p-4'}`} style={{ display: 'grid', gridTemplateColumns: `repeat(7, ${CELL})`, gridTemplateRows: `repeat(6, ${CELL})`, gap: GAP }}>
       {/* character portrait – center block rows 1-4 */}
       <div style={{ gridColumn: '3 / span 3', gridRow: '1 / span 4' }} className="flex items-center justify-center rounded-lg border border-line bg-panel-2/60">
         {character.imageUrl
@@ -217,7 +221,7 @@ function GearTotalsCard({ character, preset, mobile }: { character: Character; p
   const rows = relevantRows(t, character.flameWeights)
   const fmt = (n: number) => Number(n.toFixed(1)).toLocaleString()
   return (
-    <div className={`card w-full ${mobile ? 'p-3' : 'max-w-[620px] p-4'}`}>
+    <div data-tour="gear-totals" className={`card w-full ${mobile ? 'p-3' : 'max-w-[620px] p-4'}`}>
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <span className="label">Gear totals</span>
         <span className="text-[11px] text-muted">flames + potentials · ★ {t.stars}/{t.starGoal}</span>

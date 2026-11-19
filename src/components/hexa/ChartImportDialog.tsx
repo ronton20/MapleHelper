@@ -234,7 +234,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
   }
 
   return (
-    <Modal title="Import HEXA chart" onClose={onClose} xwide>
+    <Modal title="Import HEXA chart" onClose={onClose} xwide help="import-chart">
       {phase === 'analyzing' && (
         <div className="py-8 text-center">
           <div className="mb-2 text-sm">{progress.msg}</div>
@@ -245,13 +245,13 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
       {phase === 'error' && <div className="py-6 text-sm text-red-400">{err}</div>}
       {phase === 'review' && canvas && (
         <div className="max-h-[78vh] space-y-4 overflow-y-auto pr-1">
-          <div className="rounded-md border border-accent/40 bg-accent/5 p-2 text-xs">
+          <div data-tour="imp-warn" className="rounded-md border border-accent/40 bg-accent/5 p-2 text-xs">
             <div>⚠ Levels are read by OCR and digits get confused (1↔4, 20↔2, 29↔23) — please skim all levels against the chart, not only the flagged ones. Use ↑/↓ (or Enter) to jump between levels; a flagged level counts as checked once you've been in it and moved on.</div>
             {warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
             {bankMsg && <div className="flex items-center gap-1"><Library size={11} />{bankMsg}</div>}
           </div>
 
-          <section>
+          <section data-tour="imp-skills">
             <div className="mb-2 flex items-center justify-between">
               <span className="label">Skills found · {liveSkills.length}{untyped ? ` · ${untyped} without a type` : ''}{unnamed ? ` · ${unnamed} unnamed` : ''}</span>
             </div>
@@ -291,7 +291,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
             <div className="mt-1 text-[11px] text-muted"><Merge size={10} className="inline" /> Use ⇢ to merge an icon variant (e.g. a level-20 Hecate icon) into its skill.</div>
           </section>
 
-          <section>
+          <section data-tour="imp-steps">
             <div className="mb-2 flex items-center justify-between">
               <span className="label">Steps · {steps.length}{flagged ? <span className="text-accent"> · {flagged} to check</span> : ''}</span>
               <div className="flex items-center gap-2">
@@ -335,7 +335,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
             </div>
           </section>
 
-          <section className="space-y-2 border-t border-line pt-3">
+          <section data-tour="imp-save" className="space-y-2 border-t border-line pt-3">
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1.4fr]">
               <label className="text-xs"><span className="label mb-1 block">Class</span>
                 <select value={classKey} onChange={e => setClassKey(e.target.value)} className="text-xs">
@@ -353,7 +353,7 @@ export function ChartImportDialog({ file, className, classKey: initialClassKey =
               {libraryOn && <label className="flex items-center gap-2 text-xs" title="Upload to the shared library so other players of this class can start from it"><input type="checkbox" className="w-auto" checked={publish} onChange={e => setPublish(e.target.checked)} /><Upload size={12} />Share with other {CLASS_BY_KEY[classKey]?.name ?? ''} players</label>}
               <div className="ml-auto flex gap-2">
                 <button className="btn" onClick={onClose}>Cancel</button>
-                <button className="btn btn-primary" onClick={apply} disabled={liveSkills.length === 0 || ((saveTemplate || publish) && (!templateName.trim() || !classKey))}>Apply to character</button>
+                <button className="btn btn-primary" data-tour="imp-apply" onClick={apply} disabled={liveSkills.length === 0 || ((saveTemplate || publish) && (!templateName.trim() || !classKey))}>Apply to character</button>
               </div>
             </div>
             {(saveTemplate || publish) && (!templateName.trim() || !classKey) && <div className="text-[11px] text-accent">Pick a class and a save name to save or share this data.</div>}

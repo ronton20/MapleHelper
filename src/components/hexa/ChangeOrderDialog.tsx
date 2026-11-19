@@ -74,7 +74,7 @@ export function ChangeOrderDialog({ character, profile, onClose }: { character: 
 
   const cls = CLASS_BY_KEY[classKey]?.name ?? 'this class'
   return (
-    <Modal title="Change leveling order" onClose={onClose} wide>
+    <Modal title="Change leveling order" onClose={onClose} wide help="change-order">
       <div className="space-y-3 text-sm">
         <div className="flex items-center gap-2">
           <p className="flex-1 text-xs text-muted">Pick the HEXA data for {cls} to follow. Your current levels stay as they are; only the node list and the leveling order are replaced.</p>
@@ -82,7 +82,7 @@ export function ChangeOrderDialog({ character, profile, onClose }: { character: 
         </div>
         {!classKey && <div className="text-xs text-accent">Set the character's class first (Edit character).</div>}
         {libState === 'error' && <div className="text-xs text-muted">Shared library unavailable right now — data saved on this device still works.</div>}
-        <div className="max-h-[55vh] divide-y divide-line overflow-y-auto rounded-md border border-line">
+        <div data-tour="change-list" className="max-h-[55vh] divide-y divide-line overflow-y-auto rounded-md border border-line">
           {options.length === 0 && <div className="p-4 text-center text-xs text-muted">{libState === 'loading' ? 'Looking for HEXA data…' : `No HEXA data for ${cls} yet.`}</div>}
           {options.map(o => (
             <div key={o.id} className={`flex flex-wrap items-center gap-2 px-2 py-1.5 ${o.id === currentId ? 'bg-accent/5' : ''}`}>

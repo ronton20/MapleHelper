@@ -10,6 +10,8 @@ import { db, createCharacter, deleteCharacter, updateCharacter, getSettings, sor
 import { useUI } from '../store'
 import { lookupCharacter } from '../api/nexon'
 import type { Character, Region } from '../types'
+import { HelpButton } from '../tutorial/Tutorial'
+import { useTour, useModalOpen } from '../tutorial/store'
 
 export function Sidebar() {
   const stored = useLiveQuery(async () => sortCharacters(await db.characters.toArray()), []) ?? []
@@ -71,14 +73,17 @@ export function Sidebar() {
 
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-panel max-[900px]:w-full">
+    <aside data-tour="sidebar" className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-panel max-[900px]:w-full">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="text-sm font-semibold tracking-wide">Maple Helper</div>
-        <button className="btn btn-ghost btn-sm" title="Settings" onClick={() => setView('settings')}><Settings size={16} /></button>
+        <div className="flex items-center">
+          <HelpButton guide="layout" />
+          <button className="btn btn-ghost btn-sm" data-tour="settings-btn" title="Settings" onClick={() => setView('settings')}><Settings size={16} /></button>
+        </div>
       </div>
 
       <div className="px-3 pb-2">
-        <div className="flex gap-1 rounded-md border border-line bg-panel-2 p-1">
+        <div data-tour="view-toggle" className="flex gap-1 rounded-md border border-line bg-panel-2 p-1">
           <TabBtn active={view === 'equipment'} onClick={() => setView('equipment')} icon={<Swords size={14} />} label="Gear" />
           <TabBtn active={view === 'hexa'} onClick={() => setView('hexa')} icon={<Hexagon size={14} />} label="HEXA" />
         </div>
@@ -86,10 +91,10 @@ export function Sidebar() {
 
       <div className="flex items-center justify-between px-4 pt-2 pb-1">
         <span className="label">Characters</span>
-        <button className="btn btn-ghost btn-sm" onClick={() => setAdding(true)} title="Add character"><Plus size={14} /></button>
+        <button className="btn btn-ghost btn-sm" data-tour="add-char" onClick={() => setAdding(true)} title="Add character"><Plus size={14} /></button>
       </div>
 
-      <div ref={listRef} className="relative flex-1 overflow-y-auto px-2 pt-1.5 pb-1">
+      <div ref={listRef} data-tour="char-list" className="relative flex-1 overflow-y-auto px-2 pt-1.5 pb-1">
         {/* drop target outline */}
         {drag && <div className="pointer-events-none absolute right-2 left-2 rounded-md border-2 border-dashed border-accent/50 bg-accent/5 transition-[top] duration-150 ease-out" style={{ top: drag.top + (drag.to - drag.from) * drag.rowH, height: drag.rowH - 4 }} />}
         {characters.length === 0 && (
@@ -152,6 +157,7 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   const [err, setErr] = useState('')
   const [note, setNote] = useState('')
   const [classKey, setClassKey] = useState<string>(existing?.classKey || classKeyForJob(existing?.job) || '')
+  useTour('add-character', !existing)
   const allTemplates = useLiveQuery(() => db.templates.orderBy('name').toArray(), []) ?? []
   // only data for the chosen class: templates saved on this device and shared templates of that class
   const localTemplates = allTemplates.filter(t => t.classKey === classKey)
@@ -206,9 +212,9 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
   }
 
   return (
-    <Modal title={existing ? 'Edit character' : 'Add character'} onClose={onClose}>
+    <Modal title={existing ? 'Edit character' : 'Add character'} onClose={onClose} help="add-character">
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
+        <div data-tour="char-region" className="grid grid-cols-2 gap-2">
           <div>
             <div className="label mb-1">Region</div>
             <select value={region} onChange={e => setRegion(e.target.value as Region)}>
@@ -224,7 +230,7 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
             </select>
           </div>
         </div>
-        <div>
+        <div data-tour="char-name">
           <div className="label mb-1">Character name</div>
           <div className="flex gap-2">
             <input value={name} onChange={e => setName(e.target.value)} placeholder="IGN" autoFocus onKeyDown={e => e.key === 'Enter' && fetchFromNexon()} />
@@ -233,7 +239,7 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
           <div className="mt-1 text-[11px] text-muted">Pulls class, level, world and image from the GMS rankings for the region / world type above. Or fill in manually.</div>
           {err && <div className="mt-1 text-xs text-red-400">{err}</div>}
         </div>
-        <div className="grid grid-cols-[2fr_1fr_1fr] gap-2">
+        <div data-tour="char-fields" className="grid grid-cols-[2fr_1fr_1fr] gap-2">
           <div>
             <div className="label mb-1">Class</div>
             <select value={classKey} onChange={e => { setClassKey(e.target.value); setNote('') }} className={classKey ? '' : 'text-muted'}>
@@ -245,8 +251,9 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
           <div><div className="label mb-1">World</div><input value={world} onChange={e => setWorld(e.target.value)} placeholder="Kronos" /></div>
         </div>
         {note && <div className="-mt-1 text-[11px] text-accent">{note}</div>}
-        <div><div className="label mb-1">Image URL</div><input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://msavatar1.nexon.net/Character/....png" /></div>
-        <div>
+        <div data-tour="char-image"><div className="label mb-1">Image URL</div><input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://msavatar1.nexon.net/Character/....png" /></div>
+        <div data-tour="char-hexa" className="space-y-1">
+          <div>
           <div className="label mb-1">HEXA data</div>
           <select value={classId} onChange={e => setClassId(e.target.value)} disabled={!classKey}>
             <option value="">Generic (rename nodes yourself)</option>
@@ -260,20 +267,25 @@ export function AddCharacterDialog({ onClose, onCreated, existing }: { onClose: 
             : libState === 'error' ? 'Shared library unavailable right now — data saved on this device still works.'
             : `${localTemplates.length + lib.length} option(s) for ${CLASS_BY_KEY[classKey]?.name ?? classKey}. Shared data is downloaded when you save.`}
         </div>
+        </div>
         <div className="flex justify-end gap-2 pt-2">
           <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={save} disabled={!name.trim()}>{existing ? 'Save' : 'Add'}</button>
+          <button className="btn btn-primary" data-tour="char-save" onClick={save} disabled={!name.trim()}>{existing ? 'Save' : 'Add'}</button>
         </div>
       </div>
     </Modal>
   )
 }
 
-export function Modal({ title, onClose, children, wide, xwide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean; xwide?: boolean }) {
+export function Modal({ title, onClose, children, wide, xwide, help }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean; xwide?: boolean; help?: string }) {
+  useModalOpen()
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 max-[900px]:p-0" onMouseDown={onClose}>
       <div className={`card w-full ${xwide ? 'max-w-5xl' : wide ? 'max-w-2xl' : 'max-w-md'} max-h-[92vh] overflow-y-auto p-5 shadow-2xl max-[900px]:h-full max-[900px]:max-h-none max-[900px]:max-w-none max-[900px]:rounded-none`} style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))', paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }} onMouseDown={e => e.stopPropagation()}>
-        <div className="mb-4 text-sm font-semibold">{title}</div>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold">{title}</span>
+          {help && <HelpButton guide={help} className="-my-1 -mr-2" />}
+        </div>
         {children}
       </div>
     </div>

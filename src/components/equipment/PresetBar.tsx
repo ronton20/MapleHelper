@@ -35,7 +35,7 @@ export function PresetBar({ character }: { character: Character }) {
   }
 
   return (
-    <div className="flex items-center gap-1 border-b border-line px-6 py-2">
+    <div data-tour="presets" className="flex items-center gap-1 border-b border-line px-6 py-2">
       <span className="label mr-2">Presets</span>
       {character.presets.map(p => (
         <div key={p.id} className={`flex items-center rounded-md border text-xs transition-colors ${p.id === active ? 'border-accent/60 bg-accent/10 text-accent' : 'border-line bg-panel-2 text-muted hover:text-text'}`}>

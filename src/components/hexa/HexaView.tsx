@@ -16,6 +16,8 @@ import { Modal } from '../Sidebar'
 import { useBanks } from '../../api/bank'
 import { linkNodesToBank } from '../../lib/chart/bankMatch'
 import { SLOTS, SLOT_BY_KEY, nodeIcon, nodeName, nodesFromBank, coreName, type SkillBank } from '../../data/skillBank'
+import { HelpButton } from '../../tutorial/Tutorial'
+import { useTour } from '../../tutorial/store'
 
 /** skill banks of the current character's class, for icon / name lookups below */
 const BankCtx = createContext<{ cls: SkillBank | null; common: SkillBank | null }>({ cls: null, common: null })
@@ -67,6 +69,13 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
   const [tab, setTab] = useState<'nodes' | 'path' | 'image'>('path')
   const [zoom, setZoom] = useState(1)
   const importRef = useRef<HTMLInputElement>(null)
+  useTour('hexa')
+  // the tutorial can switch the mobile section tabs to show what it talks about
+  useEffect(() => {
+    const on = (e: Event) => { const d = (e as CustomEvent<string>).detail; if (d?.startsWith('hexa-tab:')) setTab(d.slice(9) as 'nodes' | 'path' | 'image') }
+    window.addEventListener('tutorial', on)
+    return () => window.removeEventListener('tutorial', on)
+  }, [])
 
   const totals = useMemo(() => {
     let spent = 0, total = 0, erdaSpent = 0, erdaTotal = 0
@@ -165,28 +174,31 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
     <div className="flex h-full min-w-0 flex-col overflow-y-auto">
       {/* header */}
       <div className={`flex flex-wrap items-center border-b border-line ${mobile ? 'gap-3 px-3 py-2' : 'gap-6 px-6 py-4'}`}>
-        <div className="min-w-0 flex-1">
+        <div data-tour="hexa-header" className="min-w-0 flex-1">
           <h1 className={`font-semibold ${mobile ? 'text-base' : 'text-lg'}`}>HEXA{mobile ? '' : ` · ${character.name}`}</h1>
           <div className="text-xs text-muted">{cls?.name ?? 'Generic template'} · {profile.nodes.length} nodes{profile.autoPath && profile.order.length ? ` · path from ${cls?.orderSource ?? 'custom order'}` : ''}</div>
         </div>
+        <div data-tour="hexa-frags" className={`flex ${mobile ? 'gap-3' : 'gap-6'}`}>
         <Field label="Fragments owned"><input type="number" value={profile.fragmentsOwned || ''} placeholder="0" onChange={e => save({ fragmentsOwned: Number(e.target.value) })} className="w-24 text-center" /></Field>
         <Field label="Fragments / day"><input type="number" value={profile.fragsPerDay || ''} placeholder="0" onChange={e => save({ fragsPerDay: Number(e.target.value) })} className="w-24 text-center" /></Field>
-        <div className="min-w-[240px]">
+        </div>
+        <div data-tour="hexa-progress" className="min-w-[240px]">
           <div className="label mb-1">Completion · {totals.pct.toFixed(2)}%</div>
           <div className="h-2 w-full overflow-hidden rounded bg-panel-2"><div className="h-full bg-accent" style={{ width: `${totals.pct}%` }} /></div>
           <div className="mt-1 text-[11px] text-muted">{fmt(totals.spent)} / {fmt(totals.total)} frags · {fmt(totals.erdaSpent)} / {fmt(totals.erdaTotal)} erda</div>
         </div>
+        <HelpButton guide="hexa" className="self-start" />
       </div>
 
       {profile.order.length === 0 && !!cls?.order?.length && !profile.autoPath && (
-        <div className="flex items-center gap-3 border-b border-line bg-rare/10 px-6 py-2 text-sm">
+        <div data-tour="hexa-use-order" className="flex items-center gap-3 border-b border-line bg-rare/10 px-6 py-2 text-sm">
           <span className="text-muted">A leveling order for {cls.name} is available ({cls.order.length} steps, {cls.orderSource}).</span>
           <button className="btn btn-sm btn-primary" onClick={() => save({ order: cls.order!, autoPath: true, nodes: profile.nodes.map(n => ({ ...n, slot: n.slot ?? cls.nodes.find(c => c.id === n.id)?.slot, icon: n.icon ?? cls.nodes.find(c => c.id === n.id)?.icon })) })}>Use it</button>
         </div>
       )}
 
       {nextStep && (
-        <div className="flex items-center gap-3 border-b border-line bg-accent/5 px-6 py-2 text-sm">
+        <div data-tour="hexa-next" className="flex items-center gap-3 border-b border-line bg-accent/5 px-6 py-2 text-sm">
           <span className="label text-accent">Next</span>
           <NodeIcon node={nextStep.node} size={22} />
           <span className="font-medium">{nm(nextStep.node)}</span>
@@ -197,7 +209,7 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
       )}
 
       {mobile && (
-        <div className="flex gap-1 border-b border-line px-3 py-2">
+        <div data-tour="hexa-tabs" className="flex gap-1 border-b border-line px-3 py-2">
           {(['nodes', 'path', 'image'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} className={`flex-1 rounded-md px-2 py-1.5 text-xs capitalize ${tab === t ? 'bg-accent/15 text-accent' : 'bg-panel-2 text-muted'}`}>{t}</button>
           ))}
@@ -205,10 +217,10 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
       )}
       <div className={`grid flex-1 grid-cols-1 ${mobile ? 'gap-3 p-3' : 'gap-6 p-6 xl:grid-cols-[1fr_1fr]'}`}>
         {/* nodes by group */}
-        <div className={`card p-4 ${mobile && tab !== 'nodes' ? 'hidden' : ''}`}>
+        <div data-tour="hexa-nodes" className={`card p-4 ${mobile && tab !== 'nodes' ? 'hidden' : ''}`}>
           <div className="mb-3 flex items-center justify-between">
             <span className="label">Nodes · current levels</span>
-            <div className="flex items-center gap-1">
+            <div data-tour="hexa-add-node" className="flex items-center gap-1">
               <select className="w-auto py-1 text-xs" value="" onChange={e => { if (e.target.value) addNode(e.target.value) }}>
                 <option value="">+ add node…</option>
                 {freeSlots.length > 0 && <optgroup label="Missing HEXA cores">
@@ -238,14 +250,14 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
 
         {/* path */}
         <div className={mobile ? 'space-y-3' : 'space-y-6'}>
-          <div className={`card p-4 ${mobile && tab !== 'path' ? 'hidden' : ''}`}>
+          <div data-tour="hexa-path" className={`card p-4 ${mobile && tab !== 'path' ? 'hidden' : ''}`}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <span className="label">Upgrade path · {profile.autoPath ? 'auto from leveling order' : 'manual checkpoints'}</span>
               <div className="flex items-center gap-1">
-                <button className={`btn btn-sm ${profile.autoPath ? 'btn-primary' : ''}`} title="Derive checkpoints from the leveling order and current levels" onClick={() => save({ autoPath: !profile.autoPath })}><Wand2 size={12} />Auto</button>
-                <button className="btn btn-sm" onClick={() => setEditingOrder(true)}><ListOrdered size={12} />Order ({profile.order.length})</button>
-                <button className="btn btn-sm" title="Switch to another or a newer leveling order for this class (saved on this device or shared) – levels are kept" onClick={() => setChanging(true)}><Replace size={12} />Change</button>
-                <button className="btn btn-sm" title="Share this setup (nodes, icons, leveling order) with other players of the class" onClick={() => setSharing(true)}><Share2 size={12} />Share</button>
+                <button data-tour="hexa-auto" className={`btn btn-sm ${profile.autoPath ? 'btn-primary' : ''}`} title="Derive checkpoints from the leveling order and current levels" onClick={() => save({ autoPath: !profile.autoPath })}><Wand2 size={12} />Auto</button>
+                <button className="btn btn-sm" data-tour="hexa-order" onClick={() => setEditingOrder(true)}><ListOrdered size={12} />Order ({profile.order.length})</button>
+                <button className="btn btn-sm" data-tour="hexa-change" title="Switch to another or a newer leveling order for this class (saved on this device or shared) – levels are kept" onClick={() => setChanging(true)}><Replace size={12} />Change</button>
+                <button className="btn btn-sm" data-tour="hexa-share" title="Share this setup (nodes, icons, leveling order) with other players of the class" onClick={() => setSharing(true)}><Share2 size={12} />Share</button>
                 {!profile.autoPath && <button className="btn btn-sm" onClick={addCheckpoint}><Plus size={12} />Checkpoint</button>}
               </div>
             </div>
@@ -293,7 +305,7 @@ function HexaInner({ character, profile, cls }: { character: Character; profile:
             )}
           </div>
 
-          <div className={`card p-4 ${mobile && tab !== 'image' ? 'hidden' : ''}`}>
+          <div data-tour="hexa-image" className={`card p-4 ${mobile && tab !== 'image' ? 'hidden' : ''}`}>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <span className="label">Leveling-order image</span>
               <div className="flex gap-1">
@@ -347,12 +359,12 @@ function OrderEditor({ profile, onClose, onSave }: { profile: HexaProfile; onClo
   }
 
   return (
-    <Modal title="Leveling order" onClose={onClose} wide>
+    <Modal title="Leveling order" onClose={onClose} wide help="order-editor">
       <div className="mb-2 text-xs text-muted">One step per line: <code>node name → level</code>. Names match your node list (partial names are fine). The upgrade path is derived from this list and your current levels, so steps you've already passed disappear automatically.</div>
-      <textarea rows={18} value={text} onChange={e => { setText(e.target.value); setErr('') }} className="font-mono text-xs" spellCheck={false} />
+      <textarea data-tour="order-text" rows={18} value={text} onChange={e => { setText(e.target.value); setErr('') }} className="font-mono text-xs" spellCheck={false} />
       {err && <div className="mt-1 text-xs text-red-400">{err}</div>}
       <div className="mt-3 flex items-center justify-between">
-        <div className="text-[11px] text-muted">Nodes: {profile.nodes.map(n => n.name).join(' · ')}</div>
+        <div data-tour="order-nodes" className="text-[11px] text-muted">Nodes: {profile.nodes.map(n => n.name).join(' · ')}</div>
         <div className="flex gap-2">
           <button className="btn" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={() => { const o = parse(); if (o) onSave(o) }}>Save order</button>

@@ -33,7 +33,7 @@ export function ItemSearch({ slot, version, onPick, onManual }: {
   }, [q, version, def])
 
   return (
-    <div className="space-y-2">
+    <div data-tour="item-search" className="space-y-2">
       <div className="relative">
         <Search size={14} className="absolute left-2.5 top-2.5 text-muted" />
         <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder={`Search ${def.label.toLowerCase()}…`} className="pl-8"

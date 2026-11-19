@@ -43,6 +43,14 @@ worker (Cloudflare → Worker → Settings → Variables), never in the app.
 - **Flame score** = main + secondary/12 + 3×ATT + 10×All% (community rule of thumb); goals per item come from the Flame Score Targets table (Early / Mid / Late by item level, flame-advantaged or not) — new items default to the Mid target. Weights per character in Settings.
 - **Backup**: Settings → Export JSON. Import on another device (merge or replace).
 
+## Tutorial & help
+
+First-time users get a guided tour that appears the first time they reach each page or feature (layout, adding a character, Gear page, adding / editing an item, HEXA page). The highlighted element stays usable, everything else is blocked until they use it or press **Got it**. It can be skipped, and restarted in Settings → Tutorial.
+
+Every page and dialog also has a **?** button that opens a short guide with live pictures of the parts of the page and a **Show me** spotlight for each.
+
+Content lives in `src/tutorial/guides.ts`: each step points at an element marked `data-tour="…"`. Steps whose element isn't on screen are skipped. A page offers its tour with `useTour('<id>')`; the order tours run in is `TOUR_ORDER`.
+
 ## Mobile
 
 The app is a PWA: on iPhone open it in Safari → Share → **Add to Home Screen**. Below ~900 px it switches to a phone layout

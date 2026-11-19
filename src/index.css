@@ -65,3 +65,17 @@ input[type="checkbox"] { width: auto; }
   .btn { min-height: 36px; }
   html { -webkit-text-size-adjust: 100%; }
 }
+
+/* ---- tutorial ---- */
+/* static shade around the hole; only the small outline pulses (cheap to animate) */
+.tut-spot { box-shadow: 0 0 0 9999px rgba(5, 6, 9, 0.72); }
+.tut-spot::after {
+  content: ""; position: absolute; inset: -2px; border-radius: inherit;
+  border: 2px solid var(--color-accent);
+  animation: tut-pulse 1.6s ease-in-out infinite;
+}
+@keyframes tut-pulse { 50% { opacity: 0.35; } }
+.tut-bubble { animation: tut-in 0.18s ease-out; }
+@keyframes tut-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.tut-panel { animation: tut-slide 0.2s ease-out; }
+@keyframes tut-slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }

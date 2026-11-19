@@ -8,12 +8,16 @@ import { maxStarForce, starGoalPresets, defaultStarGoal } from '../../data/starf
 import { newItem } from '../../db'
 import { flameScore, flameInputKeys, describeWeights, RANK_COLOR, RANK_LABEL } from '../../lib/flame'
 import { ItemSearch } from './ItemSearch'
+import { HelpButton } from '../../tutorial/Tutorial'
+import { useTour } from '../../tutorial/store'
 
 export function Inspector({ slot, item, character, version, onChange, onClose, mobile = false }: {
   slot: SlotKey | null; item: ItemInstance | null; character: Character; version: string
   onChange: (it: ItemInstance | null) => void; onClose: () => void; mobile?: boolean
 }) {
   const [replacing, setReplacing] = useState(false)
+  useTour('gear-add', !!slot && (!item || replacing))
+  useTour('gear-item', !!slot && !!item && !replacing)
   // desktop: fixed side panel; mobile: bottom sheet
   const shell = mobile
     ? 'fixed inset-x-0 bottom-0 z-40 max-h-[88vh] rounded-t-2xl border-t border-line bg-panel shadow-2xl'
@@ -31,8 +35,8 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
 
   if (!item || replacing) {
     return (
-      <aside className={`${shell} overflow-y-auto p-4`} style={mobile ? { paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' } : undefined}>
-        <Header title={`${item ? 'Replace' : 'Add'} · ${def.label}`} onClose={() => { if (replacing) setReplacing(false); else onClose() }} />
+      <aside data-tour="inspector" className={`${shell} overflow-y-auto p-4`} style={mobile ? { paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' } : undefined}>
+        <Header help="gear-add" title={`${item ? 'Replace' : 'Add'} · ${def.label}`} onClose={() => { if (replacing) setReplacing(false); else onClose() }} />
         <ItemSearch slot={slot} version={version}
           onPick={(p) => { onChange(newItem({ ...(item ?? {}), ...p, starForceGoal: SLOT_CAPS[slot].stars === true ? defaultStarGoal(maxStarForce(p.reqLevel, p.name)) : 0, ...(SLOT_CAPS[slot].flames === true && hasFlameTarget(slot) && !item ? { flameScoreGoal: flameTarget(p.reqLevel, true).mid } : {}) })); setReplacing(false) }}
           onManual={(name) => { onChange(newItem({ ...(item ?? {}), itemId: null, name, iconUrl: '', starForceGoal: SLOT_CAPS[slot].stars === true ? defaultStarGoal(maxStarForce(0, name)) : 0, ...(SLOT_CAPS[slot].flames === true && hasFlameTarget(slot) && !item ? { flameScoreGoal: flameTarget(0, true).mid } : {}) })); setReplacing(false) }} />
@@ -72,8 +76,8 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
   return (
     <aside className={`${shell} overflow-y-auto`} style={mobile ? { paddingBottom: 'env(safe-area-inset-bottom)' } : undefined}>
       {mobile && <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line-2" />}
-      <div className="sticky top-0 z-10 border-b border-line bg-panel p-4">
-        <Header title={def.label} onClose={onClose} />
+      <div data-tour="item-head" className="sticky top-0 z-10 border-b border-line bg-panel p-4">
+        <Header help="gear-item" title={def.label} onClose={onClose} />
         <div className="flex items-center gap-3">
           <div className="flex h-14 w-14 items-center justify-center rounded-lg border-2 bg-panel-2" style={{ borderColor: RANK_COLOR[item.potential.rank] }}>
             {item.iconUrl ? <img src={item.iconUrl} alt="" className="pixel max-h-12 max-w-12 object-contain" /> : <span className="text-[10px] text-muted">no icon</span>}
@@ -103,7 +107,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
       <ClampStars item={item} maxStars={maxStars} enabled={on('stars')} onChange={onChange} />
       <div className="space-y-5 p-4">
         {on('stars') && (
-          <Section title="Star Force" right={<Goal value={item.starForce} goal={item.starForceGoal} />}>
+          <Section tour="item-stars" title="Star Force" right={<Goal value={item.starForce} goal={item.starForceGoal} />}>
             <div className="flex items-center gap-3">
               <input type="range" min={0} max={maxStars} value={Math.min(item.starForce, maxStars)} onChange={e => upd({ starForce: Number(e.target.value) })} />
               <input type="number" min={0} max={maxStars} value={item.starForce} onChange={e => upd({ starForce: clamp(Number(e.target.value), 0, maxStars) })} className="w-16 text-center" />
@@ -125,7 +129,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
         )}
 
         {on('potential') && (
-          <Section title="Potential">
+          <Section tour="item-potential" title="Potential">
             <div className="mb-2 flex gap-1">
               {(['none', 'rare', 'epic', 'unique', 'legendary'] as PotentialRank[]).map(r => (
                 <button key={r} onClick={() => upd({ potential: { ...item.potential, rank: r } })}
@@ -145,7 +149,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
         )}
 
         {on('flames') && (
-          <Section title="Flame" right={<Goal value={score} goal={item.flameScoreGoal} label="score" />}>
+          <Section tour="item-flame" title="Flame" right={<Goal value={score} goal={item.flameScoreGoal} label="score" />}>
             <div className="grid grid-cols-4 gap-1.5">
               {flameKeys.map(k => (
                 <label key={k} className="text-[10px] text-muted">
@@ -173,7 +177,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
         )}
 
         {slot === 'weapon' && (
-          <Section title="Soul">
+          <Section tour="item-soul" title="Soul">
             <input value={item.soul.name} placeholder="e.g. Magnificent Lucid Soul" className="mb-1.5" onChange={e => upd({ soul: { ...item.soul, name: e.target.value } })} />
             <input value={item.soul.option} placeholder="e.g. ATT +3%" onChange={e => upd({ soul: { ...item.soul, option: e.target.value } })} />
           </Section>
@@ -181,7 +185,7 @@ export function Inspector({ slot, item, character, version, onChange, onClose, m
 
         {nothing && <div className="text-xs text-muted">Nothing to enhance in this slot — just tracking what's equipped.</div>}
 
-        <Section title="Notes">
+        <Section tour="item-notes" title="Notes">
           <textarea rows={3} value={item.notes} placeholder="Anything else (source, upgrade plan…)" onChange={e => upd({ notes: e.target.value })} />
         </Section>
       </div>
@@ -231,18 +235,21 @@ const FLAME_LABEL: Record<keyof Flame, string> = { str: 'STR', dex: 'DEX', int: 
 
 function clamp(n: number, a: number, b: number) { return Math.min(b, Math.max(a, isNaN(n) ? 0 : n)) }
 
-function Header({ title, onClose }: { title: string; onClose: () => void }) {
+function Header({ title, onClose, help }: { title: string; onClose: () => void; help?: string }) {
   return (
     <div className="mb-3 flex items-center justify-between">
       <span className="label">{title}</span>
-      <button className="btn btn-ghost btn-sm" onClick={onClose}><X size={14} /></button>
+      <div className="flex items-center">
+        {help && <HelpButton guide={help} />}
+        <button className="btn btn-ghost btn-sm" onClick={onClose}><X size={14} /></button>
+      </div>
     </div>
   )
 }
 
-function Section({ title, right, children }: { title: string; right?: React.ReactNode; children: React.ReactNode }) {
+function Section({ title, right, children, tour }: { title: string; right?: React.ReactNode; children: React.ReactNode; tour?: string }) {
   return (
-    <section>
+    <section data-tour={tour}>
       <div className="mb-2 flex items-center justify-between"><span className="label">{title}</span>{right}</div>
       {children}
     </section>

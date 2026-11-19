@@ -9,12 +9,16 @@ import { HexaView } from './components/hexa/HexaView'
 import { SettingsView } from './components/SettingsView'
 import { AdminView } from './components/AdminView'
 import { consumePairingHash, pull, schedulePush, getSyncKey } from './api/sync'
+import { Tutorial, HelpButton } from './tutorial/Tutorial'
+import { useTour } from './tutorial/store'
 
 export default function App() {
   const { selectedCharacterId, view, setView, drawerOpen, setDrawer } = useUI()
   const mobile = useIsMobile()
   const character = useLiveQuery(() => selectedCharacterId ? db.characters.get(selectedCharacterId) : undefined, [selectedCharacterId])
   useSync()
+  useTour('welcome')
+  useTour('layout')
 
   const main = view === 'admin' ? <AdminView /> : view === 'settings' ? <SettingsView /> : !character ? <Empty /> : view === 'hexa' ? <HexaView character={character} /> : <EquipmentView character={character} />
 
@@ -23,22 +27,24 @@ export default function App() {
       <div className="flex h-full">
         <Sidebar />
         <main className="min-w-0 flex-1">{main}</main>
+        <Tutorial />
       </div>
     )
   }
   return (
     <div className="flex h-full flex-col" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel px-2">
-        <button className="btn btn-ghost" onClick={() => setDrawer(true)} aria-label="Characters"><Menu size={18} /></button>
+        <button className="btn btn-ghost" data-tour="mobile-menu" onClick={() => setDrawer(true)} aria-label="Characters"><Menu size={18} /></button>
         <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setDrawer(true)}>
           {character?.imageUrl && <img src={character.imageUrl} alt="" className="pixel h-8 w-8 rounded bg-panel-2 object-contain" />}
           <span className="truncate text-sm font-semibold">{character?.name ?? 'Maple Helper'}</span>
           {character?.level ? <span className="text-xs text-muted">Lv. {character.level}</span> : null}
         </button>
-        <button className="btn btn-ghost" onClick={() => setView('settings')} aria-label="Settings"><Settings size={18} /></button>
+        <HelpButton guide="layout" />
+        <button className="btn btn-ghost" data-tour="settings-btn" onClick={() => setView('settings')} aria-label="Settings"><Settings size={18} /></button>
       </header>
       <main className="min-w-0 flex-1 overflow-hidden">{main}</main>
-      <nav className="flex shrink-0 border-t border-line bg-panel" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <nav data-tour="view-toggle" className="flex shrink-0 border-t border-line bg-panel" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <Tab active={view === 'equipment'} onClick={() => setView('equipment')} icon={<Swords size={18} />} label="Gear" />
         <Tab active={view === 'hexa'} onClick={() => setView('hexa')} icon={<Hexagon size={18} />} label="HEXA" />
       </nav>
@@ -49,6 +55,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <Tutorial />
     </div>
   )
 }

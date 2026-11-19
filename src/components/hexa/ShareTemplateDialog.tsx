@@ -53,27 +53,27 @@ export function ShareTemplateDialog({ character, profile, onClose }: { character
   }
 
   return (
-    <Modal title="Share HEXA setup" onClose={onClose}>
+    <Modal title="Share HEXA setup" onClose={onClose} help="share">
       <div className="space-y-3 text-sm">
         <p className="text-xs text-muted">Uploads this character's HEXA nodes (names and skill-bank cores) and leveling order to the shared library. Your levels and progress are not shared.</p>
-        <div className="rounded-md border border-line bg-panel-2 px-3 py-2 text-xs text-muted">
+        <div data-tour="share-summary" className="rounded-md border border-line bg-panel-2 px-3 py-2 text-xs text-muted">
           {profile.nodes.length} nodes ({linked} linked to the skill bank) · {profile.order.length} leveling-order steps
         </div>
         {profile.order.length === 0 && <div className="text-xs text-accent">There's no leveling order yet. Add one with "Order" first so others get the upgrade path.</div>}
-        <label className="block"><div className="label mb-1">Class</div>
+        <label data-tour="share-class" className="block"><div className="label mb-1">Class</div>
           <select value={classKey} onChange={e => setClassKey(e.target.value)} className={classKey ? '' : 'text-muted'}>
             <option value="">Select a class…</option>
             <ClassOptions />
           </select>
         </label>
-        <label className="block"><div className="label mb-1">Save name</div>
+        <label data-tour="share-name" className="block"><div className="label mb-1">Save name</div>
           <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Ren – fragment-limited order" />
         </label>
         {!BUILD_PROXY_URL && <div className="text-xs text-red-400">The shared library isn't configured in this build.</div>}
         {msg && <div className={`text-xs ${msg.ok ? 'text-emerald-400' : 'text-red-400'}`}>{msg.text}</div>}
         <div className="flex justify-end gap-2 pt-1">
           <button className="btn" onClick={onClose}>{msg?.ok ? 'Close' : 'Cancel'}</button>
-          {!msg?.ok && <button className="btn btn-primary" disabled={busy || !name.trim() || !classKey || !BUILD_PROXY_URL || profile.nodes.length === 0} onClick={share}><Upload size={14} />{busy ? 'Sharing…' : 'Share'}</button>}
+          {!msg?.ok && <button className="btn btn-primary" data-tour="share-btn" disabled={busy || !name.trim() || !classKey || !BUILD_PROXY_URL || profile.nodes.length === 0} onClick={share}><Upload size={14} />{busy ? 'Sharing…' : 'Share'}</button>}
         </div>
       </div>
     </Modal>
